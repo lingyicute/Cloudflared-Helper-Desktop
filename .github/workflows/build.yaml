@@ -99,6 +99,12 @@ jobs:
           sha256sum "${OUT}.tar.gz" > "${OUT}.tar.gz.sha256"
           echo "ARTIFACT=${OUT}" >> "$GITHUB_ENV"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: |
+            ${{ env.ARTIFACT }}.tar.gz
+
   flatpak:
     name: Flatpak (${{ matrix.arch }})
     strategy:
