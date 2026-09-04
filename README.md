@@ -1,9 +1,7 @@
-# Cloudflared-Helper-Desktop —— Cloudflared 隧道管理器
+# Cloudflared-Helper-Desktop
+## Cloudflared 隧道管理器
 
-一个基于 **Python + GTK4 + libadwaita** 的现代化桌面应用，用于管理多条
-[Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/) 客户端连接
-（`cloudflared access tcp/ssh/rdp/smb`），派生自
-[lingyicute/Cloudflared-Helper](https://github.com/lingyicute/Cloudflared-Helper)。
+一个基于 **Python + GTK4 + libadwaita** 的现代化桌面应用，用于管理多条 [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/) 客户端连接。[Cloudflared-Helper](https://github.com/lingyicute/Cloudflared-Helper) 的 GUI 继任者。
 
 ## 功能
 
@@ -15,8 +13,11 @@
   - 自动 `chmod +x`，探测并展示当前生效的版本
 - **智能校验**：端口范围检查、低于 1024 端口的权限提示、本地端口冲突检测。
 - **贴心细节**：程序启动时自动连接、复制等效命令行、失败时的日志快捷跳转、退出前的断开确认。
-- 配置保存在 `~/.config/cloudflared-tunnel-manager/config.json`，
-  二进制保存在 `~/.local/share/cloudflared-tunnel-manager/versions/<版本>/`。
+
+## 配置
+
+- 配置保存在 `~/.config/cloudflared-tunnel-manager/config.json`
+- 二进制保存在 `~/.local/share/cloudflared-tunnel-manager/versions/<版本>/`
 
 ## 运行
 
@@ -29,7 +30,10 @@ sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
 sudo dnf install python3-gobject gtk4 libadwaita
 # Arch
 sudo pacman -S python-gobject gtk4 libadwaita
+```
 
+启动：
+```bash
 python3 main.py
 ```
 
@@ -41,22 +45,20 @@ python3 main.py
 | --- | --- |
 | `check` | 字节编译 + 在 Xvfb 中导入全部模块，验证 GTK/Adw API |
 | `pyinstaller` | 在 `ubuntu-24.04` / `ubuntu-24.04-arm` 上打包便携 tar.gz（x86_64、aarch64） |
-| `flatpak` | 使用 GNOME 47 运行时构建 `.flatpak` 包（推荐分发方式） |
-| `release` | 推送 `v*` 标签时自动创建 GitHub Release 并上传所有产物 |
+| `flatpak` | 使用 GNOME 50 运行时构建 `.flatpak` 包 |
+| `release` | 自动创建 GitHub Release 并上传所有产物 |
 
 本地构建 Flatpak：
 
 ```bash
-flatpak-builder --user --install --force-clean build-dir \
-  flatpak/uk._92li.cftm.CloudflaredTunnelManager.json
+flatpak-builder --user --install --force-clean build-dir flatpak/uk._92li.cftm.CloudflaredTunnelManager.json
 flatpak run uk._92li.cftm.CloudflaredTunnelManager
 ```
 
 本地构建 PyInstaller 便携包（Linux）：
 
 ```bash
-sudo apt install python3-venv python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
-  libgirepository-1.0-1 gobject-introspection librsvg2-common adwaita-icon-theme binutils
+sudo apt install python3-venv python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 libgirepository-1.0-1 gobject-introspection librsvg2-common adwaita-icon-theme binutils
 python3 -m venv --system-site-packages .venv
 .venv/bin/pip install "pyinstaller>=6.13"
 .venv/bin/pyinstaller --noconfirm --clean cloudflared-tunnel-manager.spec
@@ -64,7 +66,7 @@ python3 -m venv --system-site-packages .venv
 # 自检：验证产物内的 GTK4 / libadwaita typelib 是否完整（无需显示器）
 dist/cloudflared-tunnel-manager/cloudflared-tunnel-manager --self-test
 ```
-
+> [!Tip]
 > **为什么必须用 spec 文件？** PyInstaller 内置的 `gi` hooks 默认收集 **GTK 3.0**
 > 的 typelib；构建机上只有 GTK 4，hook 会静默跳过，导致产物里没有
 > `Gtk-4.0.typelib`，运行时报 `ValueError: Namespace Gtk not available`。
