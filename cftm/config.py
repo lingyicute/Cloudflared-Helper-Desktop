@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-APP_ID = "uk.92li.cftm.CloudflaredTunnelManager"
+APP_ID = "uk._92li.cftm.CloudflaredTunnelManager"
 APP_NAME = "Cloudflared 隧道管理器"
 PROJECT_URL = "https://github.com/lingyicute/Cloudflared-Helper"
 

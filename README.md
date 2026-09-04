@@ -48,8 +48,8 @@ python3 main.py
 
 ```bash
 flatpak-builder --user --install --force-clean build-dir \
-  flatpak/uk.92li.cftm.CloudflaredTunnelManager.json
-flatpak run uk.92li.cftm.CloudflaredTunnelManager
+  flatpak/uk._92li.cftm.CloudflaredTunnelManager.json
+flatpak run uk._92li.cftm.CloudflaredTunnelManager
 ```
 
 ## 目录结构
