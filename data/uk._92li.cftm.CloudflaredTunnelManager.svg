@@ -6,10 +6,9 @@
       <stop offset="1" stop-color="#f26522"/>
     </linearGradient>
   </defs>
-  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
-  <path d="M38 78a14 14 0 0 1 2-27.8A22 22 0 0 1 82 46a16 16 0 0 1 6 32H38z" fill="#fff" opacity=".95"/>
-  <path d="M28 96h72" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".85"/>
-  <circle cx="40" cy="96" r="5" fill="#2ec27e"/>
-  <circle cx="64" cy="96" r="5" fill="#2ec27e"/>
-  <circle cx="88" cy="96" r="5" fill="#2ec27e"/>
+  <rect x="8" y="8" width="112" height="112" rx="38.158" fill="url(#bg)" ry="38.158"/>
+  <path d="M 43.685 71.387 C 35.462 69.996 31.829 60.226 37.144 53.8 C 39.144 51.382 42.095 49.951 45.232 49.876 C 47.664 36.998 63.123 31.582 73.059 40.126 C 75.111 41.89 76.713 44.118 77.732 46.626 C 87.262 44.839 95.154 54.039 91.936 63.186 C 90.442 67.432 86.798 70.558 82.375 71.387 L 43.685 71.387 Z" fill="#fff" opacity=".95" style=""/>  <path d="M 33.381 85.205 L 93.974 85.205" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".85" style=""/>
+  <circle cx="43.48" cy="85.205" r="4.208" fill="#2ec27e" style=""/>
+  <circle cx="63.677" cy="85.205" r="4.208" fill="#2ec27e" style=""/>
+  <circle cx="83.875" cy="85.205" r="4.208" fill="#2ec27e" style=""/>
 </svg>
