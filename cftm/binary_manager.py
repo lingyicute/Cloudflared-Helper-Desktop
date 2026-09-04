@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tarfile
 import threading
+import time
 import urllib.request
 from pathlib import Path
 from typing import Callable, Optional
@@ -58,6 +59,31 @@ def asset_name(system: str, arch: str) -> str:
 def version_key(tag: str) -> tuple[int, ...]:
     return tuple(int(p) for p in re.findall(r"\d+", tag)) or (0,)
 
+def format_size(num: float) -> str:
+    """把字节数格式化为人类可读的字符串，如「12.3 MB」。"""
+    num = float(num)
+    for unit in ("B", "KB", "MB"):
+        if num < 1024:
+            return f"{num:.0f} B" if unit == "B" else f"{num:.1f} {unit}"
+        num /= 1024
+    return f"{num:.1f} GB"
+
+
+def format_speed(bytes_per_sec: float) -> str:
+    """把下载速度格式化为「x.x MB/s」。"""
+    return f"{format_size(bytes_per_sec)}/s"
+
+
+def format_eta(seconds: float) -> str:
+    """把剩余秒数格式化为「剩余 1 分 05 秒」这样的文本。"""
+    seconds = max(0, int(round(seconds)))
+    if seconds < 60:
+        return f"剩余 {seconds} 秒"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"剩余 {minutes} 分 {seconds:02d} 秒"
+    hours, minutes = divmod(minutes, 60)
+    return f"剩余 {hours} 小时 {minutes:02d} 分"
 
 class BinaryManager:
     def __init__(self, versions_dir: Path):
@@ -66,6 +92,7 @@ class BinaryManager:
         self.system, self.arch = detect_platform()
         self.asset = asset_name(self.system, self.arch)
         self._active_downloads: dict[str, bool] = {}  # tag -> cancel 标志
+        self._download_stats: dict[str, dict] = {}  # tag -> 下载统计（字节数 / 速度 / 剩余时间）
 
     # ------------------------------------------------------------------ 路径
     @property
@@ -88,6 +115,10 @@ class BinaryManager:
 
     def is_downloading(self, tag: str) -> bool:
         return tag in self._active_downloads
+
+    def download_stats(self, tag: str) -> Optional[dict]:
+        """正在进行的下载统计：{"got", "total", "speed", "eta"}；没有则返回 None。"""
+        return self._download_stats.get(tag)
 
     def system_binary(self) -> Optional[str]:
         return shutil.which("cloudflared")
@@ -161,6 +192,7 @@ class BinaryManager:
         if tag in self._active_downloads:
             return
         self._active_downloads[tag] = False
+        self._download_stats.pop(tag, None)
 
         def cleanup(dest_dir: Path, tmp: Path) -> None:
             try:
@@ -181,6 +213,10 @@ class BinaryManager:
                 with urllib.request.urlopen(req, timeout=30) as resp, open(tmp, "wb") as fh:
                     total = int(resp.headers.get("Content-Length") or 0)
                     got = 0
+                    started = time.monotonic()
+                    last_emit = 0.0  # 上次向 UI 汇报进度的时刻
+                    win_t, win_got = started, 0  # 速度采样窗口的起点
+                    speed = 0.0
                     while True:
                         if self._active_downloads.get(tag):
                             raise DownloadCancelled()
@@ -189,7 +225,22 @@ class BinaryManager:
                             break
                         fh.write(chunk)
                         got += len(chunk)
-                        GLib.idle_add(progress_cb, tag, (got / total) if total else -1.0)
+                        now = time.monotonic()
+                        if now - win_t >= 1.0:
+                            # 每约 1 秒重新采样一次瞬时速度，避免数字剧烈抖动
+                            speed = (got - win_got) / (now - win_t)
+                            win_t, win_got = now, got
+                        elif win_got == 0 and now > started:
+                            speed = got / (now - started)  # 第一秒内先用平均速度
+                        eta = (total - got) / speed if total and speed > 0 else -1.0
+                        self._download_stats[tag] = {"got": got, "total": total, "speed": speed, "eta": eta}
+                        # 最多每 100 ms 刷新一次 UI，避免大量 idle 回调拖慢主线程
+                        if now - last_emit >= 0.1:
+                            last_emit = now
+                            GLib.idle_add(progress_cb, tag, (got / total) if total else -1.0)
+                    elapsed = max(time.monotonic() - started, 1e-6)
+                    self._download_stats[tag] = {"got": got, "total": total, "speed": got / elapsed, "eta": 0.0}
+                    GLib.idle_add(progress_cb, tag, 1.0 if total else -1.0)
 
                 final = self.path_for(tag)
                 if self.asset.endswith(".tgz"):

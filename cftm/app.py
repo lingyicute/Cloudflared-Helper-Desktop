@@ -456,6 +456,9 @@ class Application(Adw.Application):
         self.manager = TunnelManager(self.config)
 
     def do_startup(self) -> None:
+        # 让 X11 下的 WM_CLASS / Wayland 下的 app_id 与 .desktop 文件名一致，
+        # 否则任务栏无法把窗口和应用（及其图标）对应起来；必须在 gtk_init 之前设置
+        GLib.set_prgname(APP_ID)
         Adw.Application.do_startup(self)
         provider = Gtk.CssProvider()
         if hasattr(provider, "load_from_string"):
@@ -477,6 +480,12 @@ class Application(Adw.Application):
         self.set_accels_for_action("win.new-tunnel", ["<primary>n"])
 
     def _register_app_icon(self) -> None:
+        # 非 Flatpak、且未安装到系统时，把 SVG 图标与 .desktop 文件放到 ~/.local/share，
+        # 这样 GNOME Shell / KDE Plasma 等才能通过 app_id / WM_CLASS 找到任务栏图标
+        from .desktop_integration import ensure_desktop_integration
+
+        ensure_desktop_integration()
+        # 下面让 GTK 自身也能找到图标：窗口图标、关于对话框、X11 下的 _NET_WM_ICON
         display = Gdk.Display.get_default()
         if display is None:
             return
