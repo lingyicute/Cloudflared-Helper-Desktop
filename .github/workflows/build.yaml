@@ -1,0 +1,156 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: cloudflared-tunnel-manager
+  APP_ID: uk.92li.cftm.CloudflaredTunnelManager
+
+jobs:
+  check:
+    name: Lint & import check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK4 / libadwaita / PyGObject
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-gi python3-gi-cairo \
+            gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 xvfb
+
+      - name: Byte-compile
+        run: python3 -m compileall -q cftm main.py
+
+      - name: Import modules under virtual display
+        run: |
+          xvfb-run -a python3 - <<'EOF'
+          import gi
+          gi.require_version("Gtk", "4.0")
+          gi.require_version("Adw", "1")
+          from gi.repository import Adw, Gtk
+          import cftm.app, cftm.binary_manager, cftm.tunnel, cftm.dialogs, cftm.versions_page
+          from cftm.tunnel import TunnelConfig
+          cfg = TunnelConfig(hostname="ssh.example.com", port=2222)
+          assert cfg.build_argv("cloudflared")[:3] == ["cloudflared", "access", "tcp"]
+          print("OK", Adw.get_major_version(), Adw.get_minor_version(), Adw.get_micro_version())
+          EOF
+
+  pyinstaller:
+    name: PyInstaller (${{ matrix.arch }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-venv python3-gi python3-gi-cairo \
+            gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
+            libgirepository-1.0-1 gobject-introspection \
+            librsvg2-common adwaita-icon-theme binutils
+
+      - name: Create venv with system site packages
+        run: |
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/pip install --upgrade pip pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          .venv/bin/pyinstaller --noconfirm --clean --onedir \
+            --name "$APP_NAME" \
+            --collect-all gi \
+            --hidden-import gi.repository.Gtk \
+            --hidden-import gi.repository.Adw \
+            --hidden-import gi.repository.Gio \
+            --hidden-import gi.repository.GLib \
+            --hidden-import gi.repository.Gdk \
+            --hidden-import gi.repository.Pango \
+            --hidden-import gi.repository.PangoCairo \
+            --hidden-import gi.repository.GdkPixbuf \
+            --hidden-import gi.repository.Graphene \
+            --hidden-import gi.repository.Gsk \
+            --add-data "data:data" \
+            main.py
+
+      - name: Package tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = "tag" ] || VERSION="dev-${GITHUB_SHA::7}"
+          OUT="${APP_NAME}-${VERSION}-linux-${{ matrix.arch }}"
+          cp README.md LICENSE* "dist/${APP_NAME}/" 2>/dev/null || true
+          cp data/${APP_ID}.desktop "dist/${APP_NAME}/"
+          tar -C dist -czf "${OUT}.tar.gz" "${APP_NAME}"
+          sha256sum "${OUT}.tar.gz" > "${OUT}.tar.gz.sha256"
+          echo "ARTIFACT=${OUT}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: |
+            ${{ env.ARTIFACT }}.tar.gz
+            ${{ env.ARTIFACT }}.tar.gz.sha256
+
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.os }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ${{ env.APP_NAME }}-${{ matrix.arch }}.flatpak
+          manifest-path: flatpak/${{ env.APP_ID }}.json
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+          arch: ${{ matrix.arch }}
+          upload-artifact: true
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pyinstaller, flatpak]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.sha256
+            artifacts/*.flatpak
