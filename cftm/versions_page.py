@@ -9,13 +9,14 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
-from .binary_manager import BinaryManager  # noqa: E402
+from .binary_manager import BinaryManager, format_eta, format_size, format_speed  # noqa: E402
 
 
 class ReleaseRow(Adw.ActionRow):
     def __init__(self, page: "VersionsPage", release: dict):
         super().__init__()
         self.tag = release["tag"]
+        self.bm: BinaryManager = page.bm
         self.set_title(GLib.markup_escape_text(self.tag))
         parts = [release["published"] or ""]
         if release["prerelease"]:
@@ -34,7 +35,7 @@ class ReleaseRow(Adw.ActionRow):
         dl_btn.connect("clicked", lambda *_: page.download(self.tag))
 
         prog_box = Gtk.Box(spacing=6)
-        self.progress = Gtk.ProgressBar(valign=Gtk.Align.CENTER, width_request=150, show_text=True)
+        self.progress = Gtk.ProgressBar(valign=Gtk.Align.CENTER, width_request=200, show_text=True)
         cancel_btn = Gtk.Button(icon_name="process-stop-symbolic", css_classes=["flat"], tooltip_text="取消")
         cancel_btn.connect("clicked", lambda *_: page.bm.cancel(self.tag))
         prog_box.append(self.progress)
@@ -55,12 +56,29 @@ class ReleaseRow(Adw.ActionRow):
 
     def set_progress(self, fraction: float) -> None:
         self.stack.set_visible_child_name("progress")
+        stats = self.bm.download_stats(self.tag) or {}
+        got = stats.get("got", 0)
+        total = stats.get("total", 0)
+        speed = stats.get("speed", 0.0)
+        eta = stats.get("eta", -1.0)
+        speed_text = format_speed(speed) if speed > 0 else ""
         if fraction < 0:
+            # 服务器未返回 Content-Length：无法算百分比，改为显示已下载量
             self.progress.pulse()
-            self.progress.set_text("下载中…")
+            head = format_size(got) if got else "下载中…"
         else:
             self.progress.set_fraction(fraction)
-            self.progress.set_text(f"{fraction * 100:.0f}%")
+            head = f"{fraction * 100:.0f}%"
+        self.progress.set_text(f"{head} · {speed_text}" if speed_text else head)
+        # 悬停提示：已下载 / 总大小 · 速度 · 剩余时间
+        tips = []
+        if got:
+            tips.append(f"已下载 {format_size(got)} / {format_size(total)}" if total else f"已下载 {format_size(got)}")
+        if speed_text:
+            tips.append(f"速度 {speed_text}")
+        if eta >= 0 and 0 <= fraction < 1:
+            tips.append(format_eta(eta))
+        self.progress.set_tooltip_text(" · ".join(tips) if tips else None)
 
 
 class VersionsPage(Adw.PreferencesPage):
