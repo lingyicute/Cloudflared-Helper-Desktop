@@ -100,13 +100,6 @@ jobs:
           sha256sum "${OUT}.tar.gz" > "${OUT}.tar.gz.sha256"
           echo "ARTIFACT=${OUT}" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT }}
-          path: |
-            ${{ env.ARTIFACT }}.tar.gz
-            ${{ env.ARTIFACT }}.tar.gz.sha256
-
   flatpak:
     name: Flatpak (${{ matrix.arch }})
     needs: check
@@ -135,7 +128,6 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: [pyinstaller, flatpak]
     runs-on: ubuntu-24.04
     steps:
@@ -145,12 +137,14 @@ jobs:
           merge-multiple: true
 
       - name: List artifacts
-        run: ls -la artifacts
+        run: ls -hla artifacts
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            artifacts/*.tar.gz
-            artifacts/*.sha256
-            artifacts/*.flatpak
+      - name: Create Release and Upload Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "nightly-${{ github.run_number }}" artifacts/*.tar.gz artifacts/*.flatpak \
+            --title "Nightly ${{ github.run_number }}" \
+            --notes-file - << 'EOF'
+          自动构建 No.${{ github.run_number }}
+          EOF
