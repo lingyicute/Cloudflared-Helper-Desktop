@@ -8,7 +8,7 @@ from typing import Any
 
 APP_ID = "uk._92li.cftm.CloudflaredTunnelManager"
 APP_NAME = "Cloudflared 隧道管理器"
-PROJECT_URL = "https://github.com/lingyicute/Cloudflared-Helper"
+PROJECT_URL = "https://github.com/lingyicute/Cloudflared-Helper-Desktop"
 
 
 def _xdg(env: str, default: str) -> Path:
