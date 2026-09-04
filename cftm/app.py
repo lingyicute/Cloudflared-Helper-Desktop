@@ -12,7 +12,15 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from . import __version__  # noqa: E402
 from .binary_manager import BinaryManager  # noqa: E402
-from .config import APP_ID, APP_NAME, DATA_DIR, PROJECT_URL, Config  # noqa: E402
+from .config import (  # noqa: E402
+    APP_ICON_FILE,
+    APP_ID,
+    APP_NAME,
+    DATA_DIR,
+    PROJECT_URL,
+    RESOURCE_DATA_DIR,
+    Config,
+)
 from .dialogs import LogWindow, TunnelDialog, copy_text  # noqa: E402
 from .tunnel import (  # noqa: E402
     STATE_ERROR,
@@ -457,6 +465,7 @@ class Application(Adw.Application):
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
+        self._register_app_icon()
 
         quit_action = Gio.SimpleAction.new("quit", None)
         quit_action.connect("activate", self._on_quit)
@@ -466,6 +475,18 @@ class Application(Adw.Application):
         self.add_action(about_action)
         self.set_accels_for_action("app.quit", ["<primary>q"])
         self.set_accels_for_action("win.new-tunnel", ["<primary>n"])
+
+    def _register_app_icon(self) -> None:
+        display = Gdk.Display.get_default()
+        if display is None:
+            return
+        theme = Gtk.IconTheme.get_for_display(display)
+        if APP_ICON_FILE.is_file():
+            data_dir = str(RESOURCE_DATA_DIR)
+            if data_dir not in (theme.get_search_path() or []):
+                theme.add_search_path(data_dir)
+        if theme.has_icon(APP_ID):
+            Gtk.Window.set_default_icon_name(APP_ID)
 
     def do_activate(self) -> None:
         win = self.props.active_window or MainWindow(self)
@@ -486,7 +507,7 @@ class Application(Adw.Application):
         about = Adw.AboutWindow(
             transient_for=self.props.active_window,
             application_name=APP_NAME,
-            application_icon="network-workgroup-symbolic",
+            application_icon=APP_ID,
             version=__version__,
             developer_name="lingyicute",
             comments="通过 Cloudflare Tunnel (cloudflared access) 管理多条 TCP / SSH / RDP 隧道连接，并内置 cloudflared 版本管理。",
