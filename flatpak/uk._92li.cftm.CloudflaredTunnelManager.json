@@ -1,5 +1,5 @@
 {
-  "app-id": "uk.92li.cftm.CloudflaredTunnelManager",
+  "app-id": "uk._92li.cftm.CloudflaredTunnelManager",
   "runtime": "org.gnome.Platform",
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
@@ -19,9 +19,9 @@
         "cp -r cftm main.py /app/share/cftm/",
         "printf '#!/bin/sh\\nexec python3 /app/share/cftm/main.py \"$@\"\\n' > /app/bin/cloudflared-tunnel-manager",
         "chmod 755 /app/bin/cloudflared-tunnel-manager",
-        "install -Dm644 data/uk.92li.cftm.CloudflaredTunnelManager.desktop /app/share/applications/uk.92li.cftm.CloudflaredTunnelManager.desktop",
-        "install -Dm644 data/uk.92li.cftm.CloudflaredTunnelManager.metainfo.xml /app/share/metainfo/uk.92li.cftm.CloudflaredTunnelManager.metainfo.xml",
-        "install -Dm644 data/uk.92li.cftm.CloudflaredTunnelManager.svg /app/share/icons/hicolor/scalable/apps/uk.92li.cftm.CloudflaredTunnelManager.svg"
+        "install -Dm644 data/uk._92li.cftm.CloudflaredTunnelManager.desktop /app/share/applications/uk._92li.cftm.CloudflaredTunnelManager.desktop",
+        "install -Dm644 data/uk._92li.cftm.CloudflaredTunnelManager.metainfo.xml /app/share/metainfo/uk._92li.cftm.CloudflaredTunnelManager.metainfo.xml",
+        "install -Dm644 data/uk._92li.cftm.CloudflaredTunnelManager.svg /app/share/icons/hicolor/scalable/apps/uk._92li.cftm.CloudflaredTunnelManager.svg"
       ],
       "sources": [
         {

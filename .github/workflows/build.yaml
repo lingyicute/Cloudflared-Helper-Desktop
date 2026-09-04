@@ -9,7 +9,7 @@ permissions:
 
 env:
   APP_NAME: cloudflared-tunnel-manager
-  APP_ID: uk.92li.cftm.CloudflaredTunnelManager
+  APP_ID: uk._92li.cftm.CloudflaredTunnelManager
 
 jobs:
   check:
