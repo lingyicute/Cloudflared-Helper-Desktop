@@ -35,7 +35,7 @@ python3 main.py
 
 ## 构建（GitHub Actions）
 
-`.github/workflows/build.yml` 包含四个作业：
+`.github/workflows/build.yaml` 包含四个作业：
 
 | 作业 | 说明 |
 | --- | --- |
@@ -51,6 +51,26 @@ flatpak-builder --user --install --force-clean build-dir \
   flatpak/uk._92li.cftm.CloudflaredTunnelManager.json
 flatpak run uk._92li.cftm.CloudflaredTunnelManager
 ```
+
+本地构建 PyInstaller 便携包（Linux）：
+
+```bash
+sudo apt install python3-venv python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
+  libgirepository-1.0-1 gobject-introspection librsvg2-common adwaita-icon-theme binutils
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install "pyinstaller>=6.13"
+.venv/bin/pyinstaller --noconfirm --clean cloudflared-tunnel-manager.spec
+
+# 自检：验证产物内的 GTK4 / libadwaita typelib 是否完整（无需显示器）
+dist/cloudflared-tunnel-manager/cloudflared-tunnel-manager --self-test
+```
+
+> **为什么必须用 spec 文件？** PyInstaller 内置的 `gi` hooks 默认收集 **GTK 3.0**
+> 的 typelib；构建机上只有 GTK 4，hook 会静默跳过，导致产物里没有
+> `Gtk-4.0.typelib`，运行时报 `ValueError: Namespace Gtk not available`。
+> 正确的版本（`Gtk 4.0` / `Gdk 4.0` / `Adw 1`）只能通过
+> `Analysis(hooksconfig={"gi": {"module-versions": ...}})` 指定，
+> 命令行参数无法表达，所以构建配置放在 `cloudflared-tunnel-manager.spec` 中。
 
 ## 目录结构
 

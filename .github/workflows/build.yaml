@@ -62,31 +62,34 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             python3 python3-venv python3-gi python3-gi-cairo \
             gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
+            gir1.2-glib-2.0 gir1.2-pango-1.0 gir1.2-gdkpixbuf-2.0 \
+            gir1.2-graphene-1.0 gir1.2-harfbuzz-0.0 gir1.2-freedesktop \
             libgirepository-1.0-1 gobject-introspection \
-            librsvg2-common adwaita-icon-theme binutils
+            librsvg2-common adwaita-icon-theme gsettings-desktop-schemas \
+            shared-mime-info binutils
 
       - name: Create venv with system site packages
         run: |
           python3 -m venv --system-site-packages .venv
-          .venv/bin/pip install --upgrade pip pyinstaller
+          .venv/bin/pip install --upgrade pip "pyinstaller>=6.13"
 
       - name: Build with PyInstaller
         run: |
-          .venv/bin/pyinstaller --noconfirm --clean --onedir \
-            --name "$APP_NAME" \
-            --collect-all gi \
-            --hidden-import gi.repository.Gtk \
-            --hidden-import gi.repository.Adw \
-            --hidden-import gi.repository.Gio \
-            --hidden-import gi.repository.GLib \
-            --hidden-import gi.repository.Gdk \
-            --hidden-import gi.repository.Pango \
-            --hidden-import gi.repository.PangoCairo \
-            --hidden-import gi.repository.GdkPixbuf \
-            --hidden-import gi.repository.Graphene \
-            --hidden-import gi.repository.Gsk \
-            --add-data "data:data" \
-            main.py
+          .venv/bin/pyinstaller --noconfirm --clean cloudflared-tunnel-manager.spec
+
+      - name: Verify bundled GI typelibs
+        run: |
+          TYPELIBS="dist/${APP_NAME}/_internal/gi_typelibs"
+          echo "== bundled typelibs =="; ls -1 "$TYPELIBS"
+          for ns in Gtk-4.0 Gdk-4.0 Gsk-4.0 Adw-1 Gio-2.0 GLib-2.0 GObject-2.0 \
+                    Pango-1.0 PangoCairo-1.0 GdkPixbuf-2.0 Graphene-1.0; do
+            [ -f "${TYPELIBS}/${ns}.typelib" ] || { echo "::error::missing ${ns}.typelib in bundle"; exit 1; }
+          done
+
+      - name: Smoke test frozen binary (headless)
+        run: |
+          # 用干净的环境变量运行，确保只依赖打包产物、不会偷偷加载系统 typelib
+          env -i HOME="$HOME" PATH=/usr/bin:/bin "dist/${APP_NAME}/${APP_NAME}" --self-test
 
       - name: Package tarball
         run: |
