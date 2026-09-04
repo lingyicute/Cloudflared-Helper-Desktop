@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,15 @@ APP_ID = "uk._92li.cftm.CloudflaredTunnelManager"
 APP_NAME = "Cloudflared 隧道管理器"
 PROJECT_URL = "https://github.com/lingyicute/Cloudflared-Helper-Desktop"
 
+def _resource_root() -> Path:
+
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root:
+        return Path(frozen_root)
+    return Path(__file__).resolve().parent.parent
+
+RESOURCE_DATA_DIR = _resource_root() / "data"
+APP_ICON_FILE = RESOURCE_DATA_DIR / f"{APP_ID}.svg"
 
 def _xdg(env: str, default: str) -> Path:
     value = os.environ.get(env)
