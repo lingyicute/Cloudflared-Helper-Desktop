@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Cloudflared Tunnel Manager
+Name[zh_CN]=Cloudflared 隧道管理器
+Comment=Manage multiple Cloudflare Tunnel (cloudflared access) connections
+Comment[zh_CN]=管理多条 Cloudflare Tunnel (cloudflared access) 连接
+Exec=cloudflared-tunnel-manager
+Icon=uk.92li.cftm.CloudflaredTunnelManager
+Terminal=false
+Type=Application
+Categories=Network;RemoteAccess;GTK;GNOME;
+Keywords=cloudflare;tunnel;ssh;rdp;tcp;proxy;
+StartupNotify=true

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>uk.92li.cftm.CloudflaredTunnelManager</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Cloudflared Tunnel Manager</name>
+  <name xml:lang="zh_CN">Cloudflared 隧道管理器</name>
+  <summary>Manage multiple Cloudflare Tunnel connections</summary>
+  <summary xml:lang="zh_CN">管理多条 Cloudflare Tunnel 连接</summary>
+  <description>
+    <p>A modern GTK4 / libadwaita desktop app for cloudflared access tunnels. Save any number of tunnels (SSH, RDP, SMB or generic TCP), connect several of them at the same time, watch live logs, and manage cloudflared binaries downloaded straight from the official GitHub releases.</p>
+    <p xml:lang="zh_CN">现代化的 GTK4 / libadwaita 桌面应用，用于管理 cloudflared access 隧道。可保存任意数量的 SSH、RDP、SMB 或通用 TCP 隧道，多条同时连接，实时查看日志，并直接从官方 GitHub Releases 下载和切换 cloudflared 版本。</p>
+  </description>
+  <launchable type="desktop-id">uk.92li.cftm.CloudflaredTunnelManager.desktop</launchable>
+  <url type="homepage">https://github.com/lingyicute/Cloudflared-Helper</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.0" date="2026-01-01"/>
+  </releases>
+</component>
