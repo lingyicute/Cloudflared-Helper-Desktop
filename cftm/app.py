@@ -139,6 +139,26 @@ class TunnelRow(Adw.ActionRow):
         self.proc.disconnect(self._hid)
 
 
+def _window_size(raw) -> tuple[int, int]:
+    """读取配置里的窗口尺寸。
+
+    config.json 是用户可以手改的，width/height 写成字符串、null 或越界值时
+    必须退回默认值：这里的异常会让 MainWindow.__init__ 中断，程序变成
+    “进程在跑、窗口从未出现”，而且日志里只有一行 traceback。
+    """
+    if not isinstance(raw, dict):
+        raw = {}
+
+    def pick(key: str, fallback: int) -> int:
+        try:
+            value = int(raw.get(key, fallback))
+        except (TypeError, ValueError):
+            return fallback
+        return min(max(value, 640), 4096)
+
+    return pick("width", 980), pick("height", 660)
+
+
 class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app: "Application"):
         super().__init__(application=app, title=APP_NAME)
@@ -150,8 +170,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._force_close = False
         self._binary_path: Optional[str] = None
 
-        size = self.config.get("window", {}) or {}
-        self.set_default_size(int(size.get("width", 980)), int(size.get("height", 660)))
+        width, height = _window_size(self.config.get("window"))
+        self.set_default_size(width, height)
         self.set_size_request(640, 460)
 
         self._build_ui()
@@ -258,7 +278,19 @@ class MainWindow(Adw.ApplicationWindow):
         self._add_action("tunnel-logs", lambda _a, p: self.show_logs(p.get_string()), "s")
 
     # ------------------------------------------------------------ 列表
+    def _prune_log_windows(self) -> None:
+        """关掉那些隧道已经不存在的日志窗口。
+
+        否则删除一条正在看日志的隧道后，窗口会一直停在屏幕上：它指向的进程已经
+        被移出管理器，既不会再更新也关不掉（再点日志按钮只会把同一个窗口叫回来）。
+        """
+        alive = {p.config.id for p in self.manager.procs}
+        for tunnel_id in [t for t in self._log_windows if t not in alive]:
+            win = self._log_windows.pop(tunnel_id)
+            win.close()
+
     def _rebuild_list(self) -> None:
+        self._prune_log_windows()
         for row in self._rows:
             row.dispose_row()
             self.listbox.remove(row)
@@ -333,10 +365,12 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _autostart(self) -> bool:
         targets = [p for p in self.manager.procs if p.config.autostart and not p.is_active()]
-        if targets and self.current_binary():
-            for proc in targets:
-                self.start_tunnel(proc.config.id)
-            self.toast(f"已自动连接 {len(targets)} 个隧道")
+        if not targets or not self.current_binary():
+            return False
+        # start_tunnel 可能被端口冲突挡下来，按实际启动数汇报
+        started = sum(1 for proc in targets if self.start_tunnel(proc.config.id))
+        if started:
+            self.toast(f"已自动连接 {started} 个隧道")
         return False
 
     # ------------------------------------------------------------ 编辑 / 删除
@@ -391,8 +425,12 @@ class MainWindow(Adw.ApplicationWindow):
             return
         win = LogWindow(self, proc)
         self._log_windows[tunnel_id] = win
-        win.connect("close-request", lambda *_: self._log_windows.pop(tunnel_id, None) and False)
+        win.connect("close-request", lambda *_: self._on_log_window_closed(tunnel_id))
         win.present()
+
+    def _on_log_window_closed(self, tunnel_id: str) -> bool:
+        self._log_windows.pop(tunnel_id, None)
+        return False  # 不拦截关闭
 
     # ------------------------------------------------------------ 二进制
     def on_binary_changed(self) -> None:

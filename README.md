@@ -86,7 +86,7 @@ cftm/dialogs.py              编辑对话框、日志窗口
 cftm/config.py               JSON 配置
 data/                        desktop / metainfo / 图标
 flatpak/                     Flatpak 清单
-.github/workflows/build.yml  CI / 发布流程
+.github/workflows/build.yaml CI / 发布流程
 index.html                   项目主页
 ```
 
