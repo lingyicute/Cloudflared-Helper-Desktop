@@ -40,6 +40,12 @@ jobs:
           from cftm.tunnel import TunnelConfig
           cfg = TunnelConfig(hostname="ssh.example.com", port=2222)
           assert cfg.build_argv("cloudflared")[:3] == ["cloudflared", "access", "tcp"]
+          # 不许再把“协议类型”加回来：access 的 ssh/rdp/smb 只是 tcp 的别名，同一个 Action
+          assert "mode" not in TunnelConfig.__dataclass_fields__
+          # 老配置里残留的 mode 键必须被静默丢弃，且不影响生成的命令行
+          legacy = TunnelConfig.from_dict({"hostname": "nas.example.com", "port": 445, "mode": "smb"})
+          assert legacy.build_argv("cloudflared")[:3] == ["cloudflared", "access", "tcp"]
+          assert "mode" not in legacy.to_dict()
           print("OK", Adw.get_major_version(), Adw.get_minor_version(), Adw.get_micro_version())
           EOF
 

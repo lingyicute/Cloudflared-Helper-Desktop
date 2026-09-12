@@ -8,8 +8,8 @@
   <summary>Manage multiple Cloudflare Tunnel connections</summary>
   <summary xml:lang="zh_CN">管理多条 Cloudflare Tunnel 连接</summary>
   <description>
-    <p>A modern GTK4 / libadwaita desktop app for cloudflared access tunnels. Save any number of tunnels (SSH, RDP, SMB or generic TCP), connect several of them at the same time, watch live logs, and manage cloudflared binaries downloaded straight from the official GitHub releases.</p>
-    <p xml:lang="zh_CN">现代化的 GTK4 / libadwaita 桌面应用，用于管理 cloudflared access 隧道。可保存任意数量的 SSH、RDP、SMB 或通用 TCP 隧道，多条同时连接，实时查看日志，并直接从官方 GitHub Releases 下载和切换 cloudflared 版本。</p>
+    <p>A modern GTK4 / libadwaita desktop app for cloudflared access tunnels. Save any number of tunnels to reach any TCP service (SSH, RDP, SMB, ...), connect several of them at the same time, watch live logs, and manage cloudflared binaries downloaded straight from the official GitHub releases.</p>
+    <p xml:lang="zh_CN">现代化的 GTK4 / libadwaita 桌面应用，用于管理 cloudflared access 隧道。可保存任意数量的 TCP 隧道，多条同时连接，实时查看日志，并直接从官方 GitHub Releases 下载和切换 cloudflared 版本。</p>
   </description>
   <launchable type="desktop-id">uk._92li.cftm.CloudflaredTunnelManager.desktop</launchable>
   <url type="homepage">https://github.com/lingyicute/Cloudflared-Helper-Desktop</url>
