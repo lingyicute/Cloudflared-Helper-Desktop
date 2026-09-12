@@ -53,10 +53,24 @@ class TunnelConfig:
     def from_dict(cls, data: dict) -> "TunnelConfig":
         known = {k: data[k] for k in cls.__dataclass_fields__ if k in data}  # type: ignore[attr-defined]
         cfg = cls(**known)
+        # 手工编辑 / 从别处拷来的 config.json 里 id 可能缺失、为 null 或重复；
+        # 非法 id 会让 UI 构造菜单时抛 TypeError（导致启动后没有窗口），
+        # 重复 id 会让 get() 永远只命中第一条（编辑/删除作用到别的隧道）。
+        if not isinstance(cfg.id, str) or not cfg.id.strip():
+            cfg.id = uuid.uuid4().hex[:10]
         try:
             cfg.port = int(cfg.port)
         except (TypeError, ValueError):
             cfg.port = 21128
+        if not 1 <= cfg.port <= 65535:
+            cfg.port = 21128
+        if cfg.mode not in {key for key, _ in MODES}:
+            cfg.mode = "tcp"
+        for str_field in ("name", "hostname", "listen_host", "extra_args"):
+            value = getattr(cfg, str_field)
+            if not isinstance(value, str):
+                setattr(cfg, str_field, "" if value is None else str(value))
+        cfg.autostart = bool(cfg.autostart)
         return cfg
 
     def copy(self) -> "TunnelConfig":
@@ -102,6 +116,9 @@ class TunnelProcess(GObject.Object):
         self._proc: Optional[Gio.Subprocess] = None
         self._stream: Optional[Gio.DataInputStream] = None
         self._stopping = False
+        # 进程已退出、但管道里可能还压着没读完的输出时，记下退出码，等 EOF 再收尾
+        self._pending_exit: Optional[int] = None
+        self._eof = False
 
     # ------------------------------------------------------------ 属性
     def is_active(self) -> bool:
@@ -134,6 +151,8 @@ class TunnelProcess(GObject.Object):
         argv = self.config.build_argv(binary)
         self.last_error = None
         self._stopping = False
+        self._pending_exit = None
+        self._eof = False
         self._set_state(STATE_STARTING)
         self._append("$ " + " ".join(shlex.quote(a) for a in argv))
         try:
@@ -174,7 +193,8 @@ class TunnelProcess(GObject.Object):
         return False
 
     def _promote_running(self, proc: Gio.Subprocess) -> bool:
-        if self._proc is proc and self.state == STATE_STARTING:
+        # 用户在这 2.5 秒里点了断开时不要再报“已连接”，否则会弹出一条反直觉的提示
+        if self._proc is proc and self.state == STATE_STARTING and not self._stopping:
             self._set_state(STATE_RUNNING)
         return False
 
@@ -186,7 +206,13 @@ class TunnelProcess(GObject.Object):
             line, _length = stream.read_line_finish_utf8(result)
         except GLib.Error:
             line = None
-        if line is None or stream is not self._stream:
+        if stream is not self._stream:
+            return
+        if line is None:
+            # EOF：进程退出时最后几行日志（往往就是失败原因）已经读完，可以收尾了
+            self._eof = True
+            if self._pending_exit is not None:
+                self._finish_exit()
             return
         text = line.rstrip("\r\n")
         if text:
@@ -206,15 +232,32 @@ class TunnelProcess(GObject.Object):
         if proc is not self._proc:
             return
         code = proc.get_exit_status() if proc.get_if_exited() else -1
-        self._append(f"[进程已退出，状态码 {code}]")
+        self.started_at = None
+        if self._stream is not None and not self._eof:
+            # 管道里可能还压着没读完的输出，等 _on_line 读到 EOF 再改状态；
+            # 万一写入端被子进程的后代长期持有，兜底定时器负责收尾。
+            self._pending_exit = code
+            GLib.timeout_add(2000, self._finish_exit)
+        else:
+            self._finish_exit(code)
+
+    def _finish_exit(self, code: Optional[int] = None) -> bool:
+        """进程退出后的统一收尾：EOF 回调与兜底定时器谁先到谁负责，只生效一次。"""
+        if code is None:
+            if self._pending_exit is None:
+                return False
+            code, self._pending_exit = self._pending_exit, None
+        else:
+            self._pending_exit = None
         self._proc = None
         self._stream = None
-        self.started_at = None
+        self._append(f"[进程已退出，状态码 {code}]")
         if self._stopping or code == 0:
             self._set_state(STATE_STOPPED)
         else:
             self._set_state(STATE_ERROR)
         self._stopping = False
+        return False
 
 
 class TunnelManager(GObject.Object):
@@ -233,10 +276,22 @@ class TunnelManager(GObject.Object):
             self._wrap(TunnelConfig.from_dict(item))
 
     def _wrap(self, cfg: TunnelConfig) -> TunnelProcess:
+        self._ensure_unique_id(cfg)
         proc = TunnelProcess(cfg)
         proc.connect("state-changed", lambda p, st: self.emit("state-changed", p.config.id, st))
         self.procs.append(proc)
         return proc
+
+    def _ensure_unique_id(self, cfg: TunnelConfig) -> TunnelConfig:
+        """保证 id 是非空且唯一的字符串。
+
+        手工编辑（或从别处拷贝）config.json 时很容易出现 id 缺失 / 为 null / 两条重复，
+        那会让 get() 永远只命中第一条——在 UI 上删除/编辑其中一行，实际操作的是另一条。
+        """
+        taken = {p.config.id for p in self.procs}
+        if not isinstance(cfg.id, str) or not cfg.id or cfg.id in taken:
+            cfg.id = uuid.uuid4().hex[:10]
+        return cfg
 
     def save(self) -> None:
         self.config.set("tunnels", [p.config.to_dict() for p in self.procs])

@@ -194,18 +194,35 @@ class BinaryManager:
         self._active_downloads[tag] = False
         self._download_stats.pop(tag, None)
 
-        def cleanup(dest_dir: Path, tmp: Path) -> None:
+        def cleanup(dir_path: Path, *files: Path) -> None:
+            """清掉残留文件；目录空了就移除，别留下“这个版本已安装”的假象。"""
+            for path in files:
+                try:
+                    if path.is_file():
+                        path.unlink()
+                except OSError:
+                    pass
             try:
-                if tmp.exists():
-                    tmp.unlink()
-                if dest_dir.exists() and not any(dest_dir.iterdir()):
-                    dest_dir.rmdir()
+                if dir_path.exists() and not any(dir_path.iterdir()):
+                    dir_path.rmdir()
             except OSError:
                 pass
+
+        def finish(error: Optional[str]) -> None:
+            """注销下载状态，再通知 UI。
+
+            顺序很重要：如果先通知 UI、再在 finally 里注销，主线程有机会在两步之间
+            跑掉 ``_sync_release_rows``，此时 ``is_downloading()`` 仍为真，那一行会被
+            跳过刷新，进度条永远停在最后一次进度上。
+            """
+            self._active_downloads.pop(tag, None)
+            self._download_stats.pop(tag, None)
+            GLib.idle_add(done_cb, tag, error)
 
         def work() -> None:
             dest_dir = self.versions_dir / tag
             tmp = dest_dir / (self.exe_name + ".part")
+            final = self.path_for(tag)
             try:
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 url = f"{DOWNLOAD_BASE}/{tag}/{self.asset}"
@@ -238,19 +255,24 @@ class BinaryManager:
                         if now - last_emit >= 0.1:
                             last_emit = now
                             GLib.idle_add(progress_cb, tag, (got / total) if total else -1.0)
+                    # 连接被中途切断时 read() 也只是返回空串，必须自己核对字节数，
+                    # 否则半截文件会被当成可用的 cloudflared 安装进去。
+                    if total and got != total:
+                        raise RuntimeError(f"下载不完整（{got}/{total} 字节），请重试")
                     elapsed = max(time.monotonic() - started, 1e-6)
                     self._download_stats[tag] = {"got": got, "total": total, "speed": got / elapsed, "eta": 0.0}
                     GLib.idle_add(progress_cb, tag, 1.0 if total else -1.0)
 
-                final = self.path_for(tag)
                 if self.asset.endswith(".tgz"):
                     with tarfile.open(tmp, "r:gz") as tf:
                         member = next(
-                            m for m in tf.getmembers() if m.name.rstrip("/").endswith("cloudflared")
+                            (m for m in tf.getmembers() if m.name.rstrip("/").endswith("cloudflared")), None
                         )
+                        if member is None:
+                            raise RuntimeError(f"{self.asset} 的压缩包里没有找到 cloudflared")
                         src = tf.extractfile(member)
                         if src is None:
-                            raise RuntimeError("压缩包中未找到 cloudflared")
+                            raise RuntimeError(f"{self.asset} 里的 cloudflared 无法读取")
                         with src, open(final, "wb") as dst:
                             shutil.copyfileobj(src, dst)
                     tmp.unlink()
@@ -258,14 +280,15 @@ class BinaryManager:
                     tmp.replace(final)
                 if self.system != "windows":
                     final.chmod(0o755)
-                GLib.idle_add(done_cb, tag, None)
+                finish(None)
             except DownloadCancelled:
-                cleanup(dest_dir, tmp)
-                GLib.idle_add(done_cb, tag, "已取消")
+                cleanup(dest_dir, tmp, final)
+                finish("已取消")
             except Exception as exc:  # noqa: BLE001
-                cleanup(dest_dir, tmp)
-                GLib.idle_add(done_cb, tag, str(exc))
+                cleanup(dest_dir, tmp, final)
+                finish(str(exc) or exc.__class__.__name__)
             finally:
+                # 兜底：万一上面任何一步抛异常，也不要把这个 tag 永久卡在“下载中”
                 self._active_downloads.pop(tag, None)
 
         threading.Thread(target=work, daemon=True).start()
