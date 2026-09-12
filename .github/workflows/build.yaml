@@ -23,7 +23,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             python3 python3-gi python3-gi-cairo \
-            gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 xvfb
+            gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-pango-1.0 libadwaita-1-0 xvfb
 
       - name: Byte-compile
         run: python3 -m compileall -q cftm main.py
@@ -129,7 +129,9 @@ jobs:
         with:
           bundle: ${{ env.APP_NAME }}-${{ matrix.arch }}.flatpak
           manifest-path: flatpak/${{ env.APP_ID }}.json
-          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+          # cache-key 带 github.sha 会让每次构建的 key 都不同、缓存永远命中不了；
+          # 改为按 arch + 清单文件哈希，才能复用 SDK/运行时缓存。
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ hashFiles('flatpak/*.json') }}
           arch: ${{ matrix.arch }}
           upload-artifact: true
 
@@ -151,8 +153,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "nightly-${{ github.run_number }}" artifacts/*.tar.gz artifacts/*.flatpak \
-            --title "Nightly ${{ github.run_number }}" \
+          # 重跑同一个 workflow 会复用 run_number：先删旧 Release/tag，否则 create 会因 tag 已存在而失败。
+          gh release delete "nightly" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "nightly" artifacts/*.tar.gz artifacts/*.flatpak \
+            --title "Nightly Release" \
             --notes-file - << 'EOF'
-          自动构建 No.${{ github.run_number }}
+          自动构建的发行版
           EOF

@@ -1,6 +1,7 @@
 """对话框：隧道编辑、实时日志窗口"""
 from __future__ import annotations
 
+import shlex
 from typing import Callable, Optional
 
 import gi
@@ -123,14 +124,29 @@ class TunnelDialog(Adw.Window):
         if not 1 <= port <= 65535:
             self._toast("端口必须在 1 到 65535 之间")
             return
+        extra_args = self.extra_row.get_text().strip()
+        if extra_args:
+            # 引号不配对时 shlex.split 会抛 ValueError：这里提前拦截，
+            # 否则保存后点“连接”会直接失败（之前是静默无反应）。
+            try:
+                shlex.split(extra_args)
+            except ValueError as exc:
+                self._toast(f"额外参数格式错误: {exc}")
+                self.extra_row.grab_focus()
+                return
+        selected = self.mode_row.get_selected()
+        _invalid = getattr(Gtk, "INVALID_LIST_POSITION", 4294967295)
+        if selected == _invalid or selected >= len(MODES):
+            self._toast("请选择协议类型")
+            return
         cfg = self.cfg
         cfg.name = self.name_row.get_text().strip()
         cfg.hostname = hostname
         cfg.port = port
         cfg.listen_host = self.listen_row.get_text().strip() or "127.0.0.1"
-        cfg.mode = MODES[self.mode_row.get_selected()][0]
+        cfg.mode = MODES[selected][0]
         cfg.autostart = self.autostart_row.get_active()
-        cfg.extra_args = self.extra_row.get_text().strip()
+        cfg.extra_args = extra_args
         self.on_save(cfg)
         self.close()
 
@@ -188,6 +204,12 @@ class LogWindow(Adw.Window):
     def _append(self, line: str) -> None:
         end = self.buffer.get_end_iter()
         self.buffer.insert(end, line + "\n")
+        # TextBuffer 不像 deque 有 maxlen：cloudflared 开 debug 日志时会狂刷输出，
+        # 不截断的话窗口开久了内存暴涨、UI 卡死。与 TunnelProcess 保持同样的 3000 行上限。
+        if self.buffer.get_line_count() > 3200:
+            start = self.buffer.get_start_iter()
+            cut = self.buffer.get_iter_at_line(200)
+            self.buffer.delete(start, cut)
         if self.follow_btn.get_active():
             self.textview.scroll_to_mark(self.end_mark, 0.0, False, 0.0, 1.0)
 
