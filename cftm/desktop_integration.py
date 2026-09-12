@@ -45,6 +45,8 @@ def system_desktop_file_exists() -> bool:
 
 def _quote_exec_arg(arg: str) -> str:
     """按 Desktop Entry 规范为 Exec= 中的单个参数加引号。"""
+    # 百分号必须先转义为 %%：否则路径里的 % 会被当作 %f/%u 等字段码展开。
+    arg = arg.replace("%", "%%")
     if arg and not any(c in arg for c in " \t\n\"'\\><~|&;$*?#()`"):
         return arg
     escaped = arg.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")

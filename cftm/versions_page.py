@@ -9,7 +9,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
-from .binary_manager import BinaryManager, format_eta, format_size, format_speed  # noqa: E402
+from .binary_manager import BinaryManager, format_eta, format_size, format_speed, version_key  # noqa: E402
 
 
 class ReleaseRow(Adw.ActionRow):
@@ -17,7 +17,7 @@ class ReleaseRow(Adw.ActionRow):
         super().__init__()
         self.tag = release["tag"]
         self.bm: BinaryManager = page.bm
-        self.set_title(GLib.markup_escape_text(self.tag))
+        self.set_title(self.tag)
         parts = [release["published"] or ""]
         if release["prerelease"]:
             parts.append("预发布")
@@ -146,8 +146,8 @@ class VersionsPage(Adw.PreferencesPage):
     # ------------------------------------------------------------ 当前
     def set_current(self, version: Optional[str], path: Optional[str]) -> None:
         if path:
-            self.current_row.set_title(GLib.markup_escape_text(f"cloudflared {version or '(版本未知)'}"))
-            self.current_row.set_subtitle(GLib.markup_escape_text(path))
+            self.current_row.set_title(f"cloudflared {version or '(版本未知)'}")
+            self.current_row.set_subtitle(path)
             self.current_icon.set_from_icon_name("emblem-ok-symbolic")
             self.current_row.remove_css_class("error")
         else:
@@ -166,6 +166,13 @@ class VersionsPage(Adw.PreferencesPage):
         active = self.config.get("active_version", "latest-installed")
         installed = self.bm.installed()
         sysbin = self.bm.system_binary()
+        # 手改配置 / 外部删除目录后，active 可能指向不存在的版本或非法类型，
+        # 此时没有任何单选被选中、界面很迷惑：静默纠正为自动模式。
+        valid_keys = {"latest-installed", "system", *installed}
+        if not isinstance(active, str) or active not in valid_keys:
+            active = "latest-installed"
+            self.config.set("active_version", active)
+            self.config.save()
 
         self._suppress_select = True
         self._add_choice(
@@ -184,7 +191,7 @@ class VersionsPage(Adw.PreferencesPage):
 
     def _add_choice(self, key: str, title: str, subtitle: str, checked: bool,
                     sensitive: bool = True, deletable: bool = False) -> None:
-        row = Adw.ActionRow(title=GLib.markup_escape_text(title), subtitle=GLib.markup_escape_text(subtitle))
+        row = Adw.ActionRow(title=title, subtitle=subtitle)
         check = Gtk.CheckButton(valign=Gtk.Align.CENTER, sensitive=sensitive)
         if self._radio_leader is None:
             self._radio_leader = check
@@ -254,7 +261,7 @@ class VersionsPage(Adw.PreferencesPage):
 
     def _set_release_placeholder(self, text: str, icon: str) -> None:
         self._clear_release_widgets()
-        row = Adw.ActionRow(title=GLib.markup_escape_text(text))
+        row = Adw.ActionRow(title=text)
         row.add_prefix(Gtk.Image.new_from_icon_name(icon))
         self.g_releases.add(row)
         self._release_widgets.append(row)
@@ -287,11 +294,20 @@ class VersionsPage(Adw.PreferencesPage):
         if self.latest_tag:
             self.g_releases.set_description(f"来源：cloudflare/cloudflared 官方仓库 · 最新稳定版 {self.latest_tag}")
             installed = self.bm.installed()
-            if installed and not self.bm.is_installed(self.latest_tag):
+            # 只有“已安装的最新版确实旧于线上稳定版”才提示：装了更新的预发布版时
+            # 不应误报“有新版本”。
+            if installed and version_key(installed[0]) < version_key(self.latest_tag):
                 self.win.toast(f"有新版本可用：{self.latest_tag}（已安装 {installed[0]}）")
+        else:
+            self.g_releases.set_description("来源：cloudflare/cloudflared 官方仓库")
         if self._install_after_fetch:
             self._install_after_fetch = False
-            self.install_latest()
+            # 当前平台没有任何带资源的稳定版时不要再触发一次刷新，
+            # 否则 install_latest → refresh → _on_releases → install_latest 无限循环。
+            if self.latest_tag:
+                self.install_latest()
+            else:
+                self.win.toast("没有找到适用于当前平台的稳定版本")
 
     def _sync_release_rows(self) -> None:
         for tag, row in self._release_rows.items():
@@ -302,9 +318,15 @@ class VersionsPage(Adw.PreferencesPage):
         if self.latest_tag:
             if self.bm.is_installed(self.latest_tag):
                 self.win.toast(f"最新版 {self.latest_tag} 已安装")
+            elif self.bm.is_downloading(self.latest_tag):
+                self.win.toast(f"正在下载 {self.latest_tag}…")
             else:
                 self.download(self.latest_tag)
         else:
+            # 列表正在刷新中时不要重复触发 fetch（按钮已禁用即为刷新中）
+            if not self.refresh_btn.get_sensitive():
+                self._install_after_fetch = True
+                return
             self._install_after_fetch = True
             self.refresh_releases()
 
@@ -323,7 +345,10 @@ class VersionsPage(Adw.PreferencesPage):
 
     def _on_done(self, tag: str, error: Optional[str]) -> None:
         if error:
-            self.win.toast(f"安装 {tag} 失败：{error}")
+            if error == "已取消":
+                self.win.toast(f"已取消安装 {tag}")
+            else:
+                self.win.toast(f"安装 {tag} 失败：{error}")
         else:
             self.win.toast(f"cloudflared {tag} 安装完成")
         self._rebuild_installed()

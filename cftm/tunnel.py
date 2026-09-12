@@ -51,6 +51,10 @@ class TunnelConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> "TunnelConfig":
+        # config.json 可能被手改坏：tunnels 里混入字符串/null/数字时 data 不是 dict，
+        # 此时必须退回默认对象而不是抛异常（否则整个应用启动即崩溃、没有窗口）。
+        if not isinstance(data, dict):
+            return cls()
         known = {k: data[k] for k in cls.__dataclass_fields__ if k in data}  # type: ignore[attr-defined]
         cfg = cls(**known)
         # 手工编辑 / 从别处拷来的 config.json 里 id 可能缺失、为 null 或重复；
@@ -60,11 +64,12 @@ class TunnelConfig:
             cfg.id = uuid.uuid4().hex[:10]
         try:
             cfg.port = int(cfg.port)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             cfg.port = 21128
         if not 1 <= cfg.port <= 65535:
             cfg.port = 21128
-        if cfg.mode not in {key for key, _ in MODES}:
+        # mode 也可能被手改成 list/dict 等不可哈希类型，直接 `in set` 会抛 TypeError
+        if not isinstance(cfg.mode, str) or cfg.mode not in {key for key, _ in MODES}:
             cfg.mode = "tcp"
         for str_field in ("name", "hostname", "listen_host", "extra_args"):
             value = getattr(cfg, str_field)
@@ -90,12 +95,25 @@ class TunnelConfig:
             "--url",
             f"{self.listen_host or '127.0.0.1'}:{self.port}",
         ]
-        if self.extra_args.strip():
+        if isinstance(self.extra_args, str) and self.extra_args.strip():
+            # extra_args 里引号不配对时 shlex.split 会抛 ValueError，调用方必须捕获
+            # （start() 会转为 ERROR 状态，对话框会提前拦截）。
             argv += shlex.split(self.extra_args)
         return argv
 
     def command_string(self, binary: str = "cloudflared") -> str:
-        return " ".join(shlex.quote(a) for a in self.build_argv(binary))
+        try:
+            argv = self.build_argv(binary)
+        except ValueError:
+            # 复制命令行时不应崩溃：退化为把整段 extra_args 当作一个参数引用起来，
+            # 用户粘贴后能看到问题所在。
+            argv = [
+                binary, "access", self.mode or "tcp",
+                "--hostname", self.hostname,
+                "--url", f"{self.listen_host or '127.0.0.1'}:{self.port}",
+                self.extra_args,
+            ]
+        return " ".join(shlex.quote(a) for a in argv)
 
 
 class TunnelProcess(GObject.Object):
@@ -119,6 +137,15 @@ class TunnelProcess(GObject.Object):
         # 进程已退出、但管道里可能还压着没读完的输出时，记下退出码，等 EOF 再收尾
         self._pending_exit: Optional[int] = None
         self._eof = False
+        # 启动瞬间配置的快照：运行中编辑会替换 self.config（保存的新值），
+        # 但实际监听的仍是旧端口；端口冲突检测必须用快照，否则会漏报/误报。
+        self._running_snapshot: Optional[TunnelConfig] = None
+
+    def running_config(self) -> TunnelConfig:
+        """当前实际生效的配置：运行中用启动快照，否则用保存的配置。"""
+        if self.is_active() and self._running_snapshot is not None:
+            return self._running_snapshot
+        return self.config
 
     # ------------------------------------------------------------ 属性
     def is_active(self) -> bool:
@@ -148,11 +175,20 @@ class TunnelProcess(GObject.Object):
     def start(self, binary: str) -> None:
         if self.is_active():
             return
-        argv = self.config.build_argv(binary)
+        try:
+            argv = self.config.build_argv(binary)
+        except ValueError as exc:
+            # extra_args 引号不配对等情况：不要把异常抛给 GTK 信号分发（用户无感知），
+            # 而是转为 ERROR 状态并写日志，UI 会弹出 toast + 日志按钮。
+            self.last_error = f"额外参数解析失败: {exc}"
+            self._append(f"[启动失败] {self.last_error}")
+            self._set_state(STATE_ERROR)
+            return
         self.last_error = None
         self._stopping = False
         self._pending_exit = None
         self._eof = False
+        self._running_snapshot = self.config.copy()
         self._set_state(STATE_STARTING)
         self._append("$ " + " ".join(shlex.quote(a) for a in argv))
         try:
@@ -163,6 +199,7 @@ class TunnelProcess(GObject.Object):
         except GLib.Error as exc:
             self.last_error = exc.message
             self._append(f"[启动失败] {exc.message}")
+            self._running_snapshot = None
             self._set_state(STATE_ERROR)
             return
 
@@ -251,6 +288,7 @@ class TunnelProcess(GObject.Object):
             self._pending_exit = None
         self._proc = None
         self._stream = None
+        self._running_snapshot = None
         self._append(f"[进程已退出，状态码 {code}]")
         if self._stopping or code == 0:
             self._set_state(STATE_STOPPED)
@@ -272,7 +310,14 @@ class TunnelManager(GObject.Object):
         super().__init__()
         self.config = config
         self.procs: list[TunnelProcess] = []
-        for item in config.get("tunnels", []) or []:
+        raw_tunnels = config.get("tunnels", []) or []
+        # 手改 config.json 可能把 tunnels 写成 dict/字符串/null：非 list 直接忽略，
+        # 否则遍历 dict 的 key（字符串）会让 from_dict 崩溃、应用无窗口。
+        if not isinstance(raw_tunnels, list):
+            raw_tunnels = []
+        for item in raw_tunnels:
+            if not isinstance(item, dict):
+                continue
             self._wrap(TunnelConfig.from_dict(item))
 
     def _wrap(self, cfg: TunnelConfig) -> TunnelProcess:
@@ -289,7 +334,7 @@ class TunnelManager(GObject.Object):
         那会让 get() 永远只命中第一条——在 UI 上删除/编辑其中一行，实际操作的是另一条。
         """
         taken = {p.config.id for p in self.procs}
-        if not isinstance(cfg.id, str) or not cfg.id or cfg.id in taken:
+        if not isinstance(cfg.id, str) or not cfg.id.strip() or cfg.id in taken:
             cfg.id = uuid.uuid4().hex[:10]
         return cfg
 
@@ -340,8 +385,26 @@ class TunnelManager(GObject.Object):
         return [p for p in self.procs if p.is_active()]
 
     def port_conflict(self, cfg: TunnelConfig) -> Optional[TunnelProcess]:
+        def _norm_host(host: object) -> str:
+            h = host if isinstance(host, str) else ""
+            h = (h or "127.0.0.1").strip().lower() or "127.0.0.1"
+            # localhost 通常解析到 127.0.0.1（和 ::1），视为同一地址
+            if h == "localhost":
+                h = "127.0.0.1"
+            return h
+
+        want_host, want_port = _norm_host(cfg.listen_host), cfg.port
         for p in self.active():
-            if p.config.id != cfg.id and p.config.port == cfg.port and p.config.listen_host == cfg.listen_host:
+            if p.config.id == cfg.id:
+                continue
+            # 用启动快照而非当前保存值：运行中编辑改了端口后，实际占用的仍是旧端口
+            running = p.running_config()
+            if running.port != want_port:
+                continue
+            have_host = _norm_host(running.listen_host)
+            # 0.0.0.0 / :: 绑定所有地址，与任何具体地址都冲突
+            any_addrs = ("0.0.0.0", "::")
+            if have_host in any_addrs or want_host in any_addrs or have_host == want_host:
                 return p
         return None
 

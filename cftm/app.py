@@ -8,7 +8,8 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from . import __version__  # noqa: E402
 from .binary_manager import BinaryManager  # noqa: E402
@@ -102,11 +103,13 @@ class TunnelRow(Adw.ActionRow):
 
     def refresh(self) -> None:
         cfg = self.proc.config
-        self.set_title(GLib.markup_escape_text(cfg.display_name))
+        # ActionRow 的 title/subtitle 是纯文本，不要 markup_escape_text，
+        # 否则名字里的 "&" 会被显示成 "&amp;"。
+        self.set_title(cfg.display_name)
         subtitle = f"{cfg.hostname}  →  {cfg.listen_host}:{cfg.port}  ·  {cfg.mode.upper()}"
         if cfg.autostart:
             subtitle += "  ·  自动连接"
-        self.set_subtitle(GLib.markup_escape_text(subtitle))
+        self.set_subtitle(subtitle)
 
         state = self.proc.state
         for css in ("running", "starting", "error"):
@@ -152,7 +155,9 @@ def _window_size(raw) -> tuple[int, int]:
     def pick(key: str, fallback: int) -> int:
         try:
             value = int(raw.get(key, fallback))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError：config 里写了 Infinity（json 允许解析为 inf），
+            # int(inf) 会抛 OverflowError 而非 ValueError，必须接住。
             return fallback
         return min(max(value, 640), 4096)
 
@@ -234,7 +239,10 @@ class MainWindow(Adw.ApplicationWindow):
         toolbar = Gtk.Box(spacing=8)
         label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
         self.summary = Gtk.Label(xalign=0, css_classes=["hero-title"])
-        self.binary_label = Gtk.Label(xalign=0, css_classes=["dim-label", "caption"], ellipsize=3)
+        self.binary_label = Gtk.Label(
+            xalign=0, css_classes=["dim-label", "caption"],
+            ellipsize=Pango.EllipsizeMode.END,
+        )
         label_box.append(self.summary)
         label_box.append(self.binary_label)
         start_all = Gtk.Button(label="全部启动", css_classes=["suggested-action"], valign=Gtk.Align.CENTER)
@@ -335,6 +343,11 @@ class MainWindow(Adw.ApplicationWindow):
         proc = self.manager.get(tunnel_id)
         if proc is None or proc.is_active():
             return False
+        # 对话框里拦过了，但手改 config.json 可能留下空 hostname：这里再兜底，
+        # 否则会拿 --hostname "" 去起进程，cloudflared 报错信息很迷惑。
+        if not proc.config.hostname.strip():
+            self.toast(f"「{proc.config.display_name}」缺少隧道主机名，请先编辑填写")
+            return False
         binary = self.current_binary()
         if not binary:
             self.toast("未找到 cloudflared，请先在“版本管理”中安装")
@@ -353,11 +366,19 @@ class MainWindow(Adw.ApplicationWindow):
             proc.stop()
 
     def start_all(self) -> None:
+        if not self.manager.procs:
+            return
+        # 二进制缺失时只提示一次就返回：否则循环里每个 start_tunnel 都会重复
+        # 弹“未找到 cloudflared”并跳页，N 条隧道就弹 N 次。
+        if not self.current_binary():
+            self.toast("未找到 cloudflared，请先在“版本管理”中安装")
+            self.stack.set_visible_child_name("versions")
+            return
         started = 0
         for proc in self.manager.procs:
             if not proc.is_active() and self.start_tunnel(proc.config.id):
                 started += 1
-        if started == 0 and self.manager.procs:
+        if started == 0:
             self.toast("没有可启动的隧道")
 
     def stop_all(self) -> None:
@@ -503,9 +524,11 @@ class Application(Adw.Application):
             provider.load_from_string(CSS)
         else:
             provider.load_from_data(CSS.encode("utf-8"))
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
+        _display = Gdk.Display.get_default()
+        if _display is not None:
+            Gtk.StyleContext.add_provider_for_display(
+                _display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
         self._register_app_icon()
 
         quit_action = Gio.SimpleAction.new("quit", None)

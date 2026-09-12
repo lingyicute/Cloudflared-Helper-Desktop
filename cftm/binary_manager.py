@@ -57,7 +57,20 @@ def asset_name(system: str, arch: str) -> str:
 
 
 def version_key(tag: str) -> tuple[int, ...]:
+    if not isinstance(tag, str):
+        return (0,)
     return tuple(int(p) for p in re.findall(r"\d+", tag)) or (0,)
+
+
+def _is_safe_tag(tag: object) -> bool:
+    """版本号只能是单级目录名，拒绝 /, \\, .. 等路径穿越。"""
+    if not isinstance(tag, str) or not tag.strip():
+        return False
+    if tag in (".", ".."):
+        return False
+    if "/" in tag or "\\" in tag or ".." in tag or "\x00" in tag:
+        return False
+    return True
 
 def format_size(num: float) -> str:
     """把字节数格式化为人类可读的字符串，如「12.3 MB」。"""
@@ -93,6 +106,27 @@ class BinaryManager:
         self.asset = asset_name(self.system, self.arch)
         self._active_downloads: dict[str, bool] = {}  # tag -> cancel 标志
         self._download_stats: dict[str, dict] = {}  # tag -> 下载统计（字节数 / 速度 / 剩余时间）
+        self._clean_stale_parts()
+
+    def _clean_stale_parts(self) -> None:
+        """清掉上次异常退出时残留的 .part / .extracting 文件，避免越积越大。"""
+        try:
+            for suffix in (".part", ".extracting"):
+                for part in self.versions_dir.glob("*/" + self.exe_name + suffix):
+                    try:
+                        if part.is_file():
+                            part.unlink()
+                    except OSError:
+                        pass
+            # 顺手收掉因此变空的版本目录
+            for child in self.versions_dir.iterdir():
+                try:
+                    if child.is_dir() and not any(child.iterdir()):
+                        child.rmdir()
+                except OSError:
+                    pass
+        except OSError:
+            pass
 
     # ------------------------------------------------------------------ 路径
     @property
@@ -111,6 +145,8 @@ class BinaryManager:
         return sorted(tags, key=version_key, reverse=True)
 
     def is_installed(self, tag: str) -> bool:
+        if not _is_safe_tag(tag):
+            return False
         return self.path_for(tag).exists()
 
     def is_downloading(self, tag: str) -> bool:
@@ -123,8 +159,12 @@ class BinaryManager:
     def system_binary(self) -> Optional[str]:
         return shutil.which("cloudflared")
 
-    def resolve(self, active: str) -> Optional[str]:
+    def resolve(self, active: object) -> Optional[str]:
         """根据配置解析出应使用的二进制路径；找不到返回 None。"""
+        # config.json 手改坏时 active 可能是数字/null：非字符串一律按自动处理，
+        # 否则 path_for(Path / int) 会抛 TypeError 导致 UI 刷新崩溃。
+        if not isinstance(active, str):
+            active = "latest-installed"
         if active == "system":
             return self.system_binary()
         if active == "latest-installed":
@@ -132,10 +172,11 @@ class BinaryManager:
             if inst:
                 return str(self.path_for(inst[0]))
             return self.system_binary()
-        path = self.path_for(active)
-        if path.exists():
-            return str(path)
-        # 回退：指定的版本已被删除
+        if _is_safe_tag(active):
+            path = self.path_for(active)
+            if path.exists():
+                return str(path)
+        # 回退：指定的版本已被删除或非法
         inst = self.installed()
         return str(self.path_for(inst[0])) if inst else self.system_binary()
 
@@ -148,7 +189,7 @@ class BinaryManager:
                 [path, "--version"], capture_output=True, text=True, timeout=8
             )
             text = (out.stdout or out.stderr).strip()
-            match = re.search(r"version\s+(\S+)", text)
+            match = re.search(r"version\s+(\S+)", text, re.IGNORECASE)
             return match.group(1) if match else (text.splitlines()[0] if text else None)
         except Exception:  # noqa: BLE001
             return None
@@ -165,12 +206,26 @@ class BinaryManager:
                 )
                 with urllib.request.urlopen(req, timeout=20) as resp:
                     data = json.load(resp)
+                # 触发限流等错误时 GitHub 返回的是 {"message": ...} 而非列表，
+                # 直接遍历 dict 会报 "'str' object has no attribute 'get'" 让人摸不着头脑。
+                if isinstance(data, dict):
+                    raise RuntimeError(data.get("message") or "GitHub API 返回异常")
+                if not isinstance(data, list):
+                    raise RuntimeError("GitHub API 返回格式异常")
                 releases = []
                 for rel in data:
-                    names = {a.get("name") for a in rel.get("assets", [])}
+                    if not isinstance(rel, dict):
+                        continue
+                    assets = rel.get("assets", [])
+                    if not isinstance(assets, list):
+                        assets = []
+                    names = {a.get("name") for a in assets if isinstance(a, dict)}
+                    tag = rel.get("tag_name", "")
+                    if not isinstance(tag, str) or not tag:
+                        continue
                     releases.append(
                         {
-                            "tag": rel.get("tag_name", ""),
+                            "tag": tag,
                             "published": (rel.get("published_at") or "")[:10],
                             "prerelease": bool(rel.get("prerelease")),
                             "has_asset": self.asset in names,
@@ -178,7 +233,7 @@ class BinaryManager:
                     )
                 GLib.idle_add(callback, releases, None)
             except Exception as exc:  # noqa: BLE001
-                GLib.idle_add(callback, None, str(exc))
+                GLib.idle_add(callback, None, str(exc) or exc.__class__.__name__)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -189,6 +244,9 @@ class BinaryManager:
         done_cb: Callable[[str, Optional[str]], None],
     ) -> None:
         """异步下载并安装某个版本。progress 为 0~1，未知大小时为 -1。"""
+        if not _is_safe_tag(tag):
+            GLib.idle_add(done_cb, tag, "非法的版本号")
+            return
         if tag in self._active_downloads:
             return
         self._active_downloads[tag] = False
@@ -222,13 +280,20 @@ class BinaryManager:
         def work() -> None:
             dest_dir = self.versions_dir / tag
             tmp = dest_dir / (self.exe_name + ".part")
+            # tgz 解压先写到临时文件再原子改名：直接覆写 final 的话，
+            # 解压中途失败会把原本可用的旧版本截断成坏文件。
+            extracting = dest_dir / (self.exe_name + ".extracting")
             final = self.path_for(tag)
+            had_final = final.exists()
             try:
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 url = f"{DOWNLOAD_BASE}/{tag}/{self.asset}"
                 req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                 with urllib.request.urlopen(req, timeout=30) as resp, open(tmp, "wb") as fh:
-                    total = int(resp.headers.get("Content-Length") or 0)
+                    try:
+                        total = int(resp.headers.get("Content-Length") or 0)
+                    except (TypeError, ValueError):
+                        total = 0
                     got = 0
                     started = time.monotonic()
                     last_emit = 0.0  # 上次向 UI 汇报进度的时刻
@@ -259,6 +324,8 @@ class BinaryManager:
                     # 否则半截文件会被当成可用的 cloudflared 安装进去。
                     if total and got != total:
                         raise RuntimeError(f"下载不完整（{got}/{total} 字节），请重试")
+                    if got == 0:
+                        raise RuntimeError("下载的文件为空，请重试")
                     elapsed = max(time.monotonic() - started, 1e-6)
                     self._download_stats[tag] = {"got": got, "total": total, "speed": got / elapsed, "eta": 0.0}
                     GLib.idle_add(progress_cb, tag, 1.0 if total else -1.0)
@@ -270,22 +337,33 @@ class BinaryManager:
                         )
                         if member is None:
                             raise RuntimeError(f"{self.asset} 的压缩包里没有找到 cloudflared")
+                        # 只接受普通文件：目录/链接/设备文件的 extractfile 为 None，
+                        # 且 member.issym()/islnk() 的目标不可信，必须拒绝。
+                        if not member.isfile():
+                            raise RuntimeError(f"{self.asset} 里的 cloudflared 不是普通文件")
                         src = tf.extractfile(member)
                         if src is None:
                             raise RuntimeError(f"{self.asset} 里的 cloudflared 无法读取")
-                        with src, open(final, "wb") as dst:
+                        with src, open(extracting, "wb") as dst:
                             shutil.copyfileobj(src, dst)
                     tmp.unlink()
+                    extracting.replace(final)
                 else:
                     tmp.replace(final)
                 if self.system != "windows":
                     final.chmod(0o755)
                 finish(None)
             except DownloadCancelled:
-                cleanup(dest_dir, tmp, final)
+                # 失败/取消只清临时文件：final 若是之前就装好的旧版本必须保留，
+                # 否则一次失败的覆盖安装会把可用版本也删掉。
+                cleanup(dest_dir, tmp, extracting)
+                if not had_final:
+                    cleanup(dest_dir, final)
                 finish("已取消")
             except Exception as exc:  # noqa: BLE001
-                cleanup(dest_dir, tmp, final)
+                cleanup(dest_dir, tmp, extracting)
+                if not had_final:
+                    cleanup(dest_dir, final)
                 finish(str(exc) or exc.__class__.__name__)
             finally:
                 # 兜底：万一上面任何一步抛异常，也不要把这个 tag 永久卡在“下载中”
@@ -298,4 +376,7 @@ class BinaryManager:
             self._active_downloads[tag] = True
 
     def remove(self, tag: str) -> None:
+        # 防路径穿越：tag 只能是单级目录名，否则 rmtree 会删到外面去。
+        if not _is_safe_tag(tag):
+            return
         shutil.rmtree(self.versions_dir / tag, ignore_errors=True)

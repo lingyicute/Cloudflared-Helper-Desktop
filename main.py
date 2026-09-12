@@ -17,7 +17,8 @@ def _self_test() -> int:
     try:
         gi.require_version("Gtk", "4.0")
         gi.require_version("Adw", "1")
-        from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: F401
+        gi.require_version("Pango", "1.0")
+        from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: F401
     except (ValueError, ImportError) as exc:
         print(f"self-test FAILED: {exc}", file=sys.stderr)
         print(f"GI_TYPELIB_PATH={os.environ.get('GI_TYPELIB_PATH', '')}", file=sys.stderr)
