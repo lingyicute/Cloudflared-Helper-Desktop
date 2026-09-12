@@ -14,6 +14,23 @@
 - **智能校验**：端口范围检查、低于 1024 端口的权限提示、本地端口冲突检测。
 - **贴心细节**：程序启动时自动连接、复制等效命令行、失败时的日志快捷跳转、退出前的断开确认。
 
+## 为什么没有「协议类型」选项
+
+`cloudflared access` 的 `ssh` / `rdp` / `smb` 三个子命令并不是不同的协议实现，它们只是 `tcp` 的
+[别名](https://github.com/cloudflare/cloudflared/blob/master/cmd/cloudflared/access/cmd.go)：四个子命令共用同一个 Action 和同一组 flag，源码中没有任何地方读取子命令名；`ssh://`、`rdp://`、`smb://` 这类 scheme
+也只用来推导缺省的 `--url`，对转发行为没有任何影响。
+
+因此本应用不设置「协议类型」，统一执行：
+
+```bash
+cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口>
+```
+
+> [!Note]
+> `access tcp` 这个子命令名从 cloudflared `2020.6.1` 起就有了（`2020.5.1` 及更早只有 `access ssh`，
+> 当时还没有 `tcp`）。应用内下载的版本来自官方 Releases 的最新 30 个，全部满足；只有手动把二进制指向
+> 2020 年之前的系统 PATH cloudflared 时，才需要改用 `access ssh`。然而，Cloudflare 官方仅支持一年以内的 cloudflared 版本，出于安全性上的考虑，梨不建议您使用如此古老的 cloudflared。
+
 ## 配置
 
 - 配置保存在 `~/.config/cloudflared-tunnel-manager/config.json`

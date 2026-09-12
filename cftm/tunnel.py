@@ -26,15 +26,6 @@ STATE_LABELS = {
     STATE_ERROR: "连接失败",
 }
 
-# cloudflared access 子命令
-MODES = [
-    ("tcp", "TCP（通用）"),
-    ("ssh", "SSH"),
-    ("rdp", "RDP 远程桌面"),
-    ("smb", "SMB 文件共享"),
-]
-
-
 @dataclass
 class TunnelConfig:
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:10])
@@ -42,7 +33,6 @@ class TunnelConfig:
     hostname: str = ""
     port: int = 21128
     listen_host: str = "127.0.0.1"
-    mode: str = "tcp"
     autostart: bool = False
     extra_args: str = ""
 
@@ -68,9 +58,6 @@ class TunnelConfig:
             cfg.port = 21128
         if not 1 <= cfg.port <= 65535:
             cfg.port = 21128
-        # mode 也可能被手改成 list/dict 等不可哈希类型，直接 `in set` 会抛 TypeError
-        if not isinstance(cfg.mode, str) or cfg.mode not in {key for key, _ in MODES}:
-            cfg.mode = "tcp"
         for str_field in ("name", "hostname", "listen_host", "extra_args"):
             value = getattr(cfg, str_field)
             if not isinstance(value, str):
@@ -85,11 +72,14 @@ class TunnelConfig:
     def display_name(self) -> str:
         return self.name.strip() or self.hostname or "未命名隧道"
 
+    # cloudflared 的 access tcp/ssh/rdp/smb 是同一个子命令（上游把后三者声明为 tcp 的
+    # 别名，四个子命令共用一个 Action），--url 的 scheme 也只影响缺省值不影响行为，
+    # 所以这里固定用 tcp，不必再把“协议类型”存进配置。
     def build_argv(self, binary: str) -> list[str]:
         argv = [
             binary,
             "access",
-            self.mode or "tcp",
+            "tcp",
             "--hostname",
             self.hostname,
             "--url",
@@ -108,7 +98,7 @@ class TunnelConfig:
             # 复制命令行时不应崩溃：退化为把整段 extra_args 当作一个参数引用起来，
             # 用户粘贴后能看到问题所在。
             argv = [
-                binary, "access", self.mode or "tcp",
+                binary, "access", "tcp",
                 "--hostname", self.hostname,
                 "--url", f"{self.listen_host or '127.0.0.1'}:{self.port}",
                 self.extra_args,

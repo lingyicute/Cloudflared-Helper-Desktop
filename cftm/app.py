@@ -105,7 +105,7 @@ class TunnelRow(Adw.ActionRow):
         # ActionRow 的 title/subtitle 是纯文本，不要 markup_escape_text，
         # 否则名字里的 "&" 会被显示成 "&amp;"。
         self.set_title(cfg.display_name)
-        subtitle = f"{cfg.hostname}  →  {cfg.listen_host}:{cfg.port}  ·  {cfg.mode.upper()}"
+        subtitle = f"{cfg.hostname}  →  {cfg.listen_host}:{cfg.port}"
         if cfg.autostart:
             subtitle += "  ·  自动连接"
         self.set_subtitle(subtitle)
@@ -579,7 +579,7 @@ class Application(Adw.Application):
             application_icon=APP_ID,
             version=__version__,
             developer_name="lingyicute",
-            comments="通过 Cloudflare Tunnel (cloudflared access) 管理多条 TCP / SSH / RDP 隧道连接，并内置 cloudflared 版本管理。",
+            comments="通过 Cloudflare Tunnel (cloudflared access) 管理多条任意 TCP 隧道连接，并内置 cloudflared 版本管理。",
             website=PROJECT_URL,
             issue_url=PROJECT_URL + "/issues",
             license_type=Gtk.License.AGPL_3_0,

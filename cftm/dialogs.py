@@ -10,7 +10,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
-from .tunnel import MODES, STATE_LABELS, TunnelConfig, TunnelProcess  # noqa: E402
+from .tunnel import STATE_LABELS, TunnelConfig, TunnelProcess  # noqa: E402
 
 
 def _escape_shortcut(window: Gtk.Window) -> None:
@@ -39,7 +39,7 @@ class TunnelDialog(Adw.Window):
         config: Optional[TunnelConfig],
         on_save: Callable[[TunnelConfig], None],
     ):
-        super().__init__(transient_for=parent, modal=True, default_width=540, default_height=640)
+        super().__init__(transient_for=parent, modal=True, default_width=540, default_height=560)
         self.is_new = config is None
         self.cfg = config or TunnelConfig()
         self.on_save = on_save
@@ -67,11 +67,7 @@ class TunnelDialog(Adw.Window):
         self.name_row.set_text(self.cfg.name)
         self.host_row = Adw.EntryRow(title="隧道主机名 (hostname)")
         self.host_row.set_text(self.cfg.hostname)
-        self.mode_row = Adw.ComboRow(title="协议类型", subtitle="对应 cloudflared access 子命令")
-        self.mode_row.set_model(Gtk.StringList.new([label for _, label in MODES]))
-        keys = [k for k, _ in MODES]
-        self.mode_row.set_selected(keys.index(self.cfg.mode) if self.cfg.mode in keys else 0)
-        for row in (self.name_row, self.host_row, self.mode_row):
+        for row in (self.name_row, self.host_row):
             g_basic.add(row)
         page.add(g_basic)
 
@@ -134,17 +130,11 @@ class TunnelDialog(Adw.Window):
                 self._toast(f"额外参数格式错误: {exc}")
                 self.extra_row.grab_focus()
                 return
-        selected = self.mode_row.get_selected()
-        _invalid = getattr(Gtk, "INVALID_LIST_POSITION", 4294967295)
-        if selected == _invalid or selected >= len(MODES):
-            self._toast("请选择协议类型")
-            return
         cfg = self.cfg
         cfg.name = self.name_row.get_text().strip()
         cfg.hostname = hostname
         cfg.port = port
         cfg.listen_host = self.listen_row.get_text().strip() or "127.0.0.1"
-        cfg.mode = MODES[selected][0]
         cfg.autostart = self.autostart_row.get_active()
         cfg.extra_args = extra_args
         self.on_save(cfg)
