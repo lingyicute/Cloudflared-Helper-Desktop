@@ -27,7 +27,6 @@ from .tunnel import (  # noqa: E402
     STATE_ERROR,
     STATE_LABELS,
     STATE_RUNNING,
-    STATE_STARTING,
     TunnelConfig,
     TunnelManager,
     TunnelProcess,

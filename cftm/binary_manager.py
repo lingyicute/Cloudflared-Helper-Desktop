@@ -24,7 +24,7 @@ from gi.repository import GLib
 
 GITHUB_API = "https://api.github.com/repos/cloudflare/cloudflared/releases?per_page=30"
 DOWNLOAD_BASE = "https://github.com/cloudflare/cloudflared/releases/download"
-USER_AGENT = "cloudflared-tunnel-manager/1.0 (+https://github.com)"
+USER_AGENT = "cloudflared-tunnel-manager/1.0 (+https://github.com/lingyicute/Cloudflared-Helper-Desktop)"
 
 
 class DownloadCancelled(Exception):
