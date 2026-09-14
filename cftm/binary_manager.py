@@ -57,9 +57,22 @@ def asset_name(system: str, arch: str) -> str:
 
 
 def version_key(tag: str) -> tuple[int, ...]:
+    """用于排序的版本键，预发布版本视为比同号稳定版更旧。"""
     if not isinstance(tag, str):
         return (0,)
-    return tuple(int(p) for p in re.findall(r"\d+", tag)) or (0,)
+    nums = tuple(int(p) for p in re.findall(r"\d+", tag)) or (0,)
+    # 预发布标识（rc, beta, alpha, pre）若存在，则在排序时降低优先级：
+    # 通过附加一个极小的尾缀实现：稳定版 (2025,4,0, 1) > 预发布 (2025,4,0, 0)
+    low = tag.lower()
+    is_prerelease = any(k in low for k in ("rc", "beta", "alpha", "pre", "-"))
+    # 注意：简单判断包含 '-' 可能会误伤，但版本号通常只有 '.' 和数字，'-' 出现即视为预发布
+    # 为了避免把 "2025.4.0" 误判，只在 '-' 后跟字母/数字时才算预发布，且数字部分已提取
+    # 这里用更精确的检查：若 tag 中包含 '-' 且 '-' 后有字母，则为预发布
+    if is_prerelease:
+        # 检查是否真的有预发布后缀
+        if re.search(r"-.*[a-zA-Z]", tag):
+            return nums + (0,)
+    return nums + (1,)
 
 
 def _is_safe_tag(tag: object) -> bool:
@@ -69,6 +82,9 @@ def _is_safe_tag(tag: object) -> bool:
     if tag in (".", ".."):
         return False
     if "/" in tag or "\\" in tag or ".." in tag or "\x00" in tag:
+        return False
+    # 额外拒绝以 '.' 开头的隐藏目录，避免 .hidden 这类
+    if tag.startswith("."):
         return False
     return True
 
@@ -111,13 +127,17 @@ class BinaryManager:
     def _clean_stale_parts(self) -> None:
         """清掉上次异常退出时残留的 .part / .extracting 文件，避免越积越大。"""
         try:
+            # 清理所有可能的二进制名对应的残留文件，兼容跨平台切换或旧版本残留
+            exe_names = {"cloudflared", "cloudflared.exe"}
+            exe_names.add(self.exe_name)
             for suffix in (".part", ".extracting"):
-                for part in self.versions_dir.glob("*/" + self.exe_name + suffix):
-                    try:
-                        if part.is_file():
-                            part.unlink()
-                    except OSError:
-                        pass
+                for exe in exe_names:
+                    for part in self.versions_dir.glob(f"*/{exe}{suffix}"):
+                        try:
+                            if part.is_file():
+                                part.unlink()
+                        except OSError:
+                            pass
             # 顺手收掉因此变空的版本目录
             for child in self.versions_dir.iterdir():
                 try:
@@ -140,21 +160,32 @@ class BinaryManager:
         """已安装版本标签，按版本号从新到旧排序。"""
         tags = []
         for child in self.versions_dir.iterdir() if self.versions_dir.exists() else []:
-            if child.is_dir() and (child / self.exe_name).exists():
+            if not child.is_dir():
+                continue
+            # 过滤不安全的目录名，避免把手动创建的异常目录当作已安装版本
+            if not _is_safe_tag(child.name):
+                continue
+            if (child / self.exe_name).exists():
+                tags.append(child.name)
+            # 兼容：用户可能在 Linux 上残留了 .exe 或相反，检查两种可执行名
+            elif (child / "cloudflared").exists() or (child / "cloudflared.exe").exists():
                 tags.append(child.name)
         return sorted(tags, key=version_key, reverse=True)
 
     def is_installed(self, tag: str) -> bool:
         if not _is_safe_tag(tag):
             return False
-        return self.path_for(tag).exists()
+        # 兼容两种可执行名
+        return self.path_for(tag).exists() or (self.versions_dir / tag / "cloudflared").exists() or (self.versions_dir / tag / "cloudflared.exe").exists()
 
     def is_downloading(self, tag: str) -> bool:
         return tag in self._active_downloads
 
     def download_stats(self, tag: str) -> Optional[dict]:
         """正在进行的下载统计：{"got", "total", "speed", "eta"}；没有则返回 None。"""
-        return self._download_stats.get(tag)
+        # 返回拷贝，避免后台线程与主线程同时读写同一 dict 导致的不一致
+        data = self._download_stats.get(tag)
+        return dict(data) if data else None
 
     def system_binary(self) -> Optional[str]:
         return shutil.which("cloudflared")
@@ -176,6 +207,13 @@ class BinaryManager:
             path = self.path_for(active)
             if path.exists():
                 return str(path)
+            # 兼容检查另一种可执行名
+            alt1 = self.versions_dir / active / "cloudflared"
+            if alt1.exists():
+                return str(alt1)
+            alt2 = self.versions_dir / active / "cloudflared.exe"
+            if alt2.exists():
+                return str(alt2)
         # 回退：指定的版本已被删除或非法
         inst = self.installed()
         return str(self.path_for(inst[0])) if inst else self.system_binary()
@@ -219,7 +257,7 @@ class BinaryManager:
                     assets = rel.get("assets", [])
                     if not isinstance(assets, list):
                         assets = []
-                    names = {a.get("name") for a in assets if isinstance(a, dict)}
+                    names = {a.get("name") for a in assets if isinstance(a, dict) and isinstance(a.get("name"), str)}
                     tag = rel.get("tag_name", "")
                     if not isinstance(tag, str) or not tag:
                         continue
@@ -367,7 +405,9 @@ class BinaryManager:
                 finish(str(exc) or exc.__class__.__name__)
             finally:
                 # 兜底：万一上面任何一步抛异常，也不要把这个 tag 永久卡在“下载中”
+                # 同时清理统计信息，避免 UI 残留旧进度
                 self._active_downloads.pop(tag, None)
+                self._download_stats.pop(tag, None)
 
         threading.Thread(target=work, daemon=True).start()
 

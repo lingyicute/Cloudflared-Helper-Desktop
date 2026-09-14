@@ -63,6 +63,9 @@ class TunnelConfig:
             if not isinstance(value, str):
                 setattr(cfg, str_field, "" if value is None else str(value))
         cfg.autostart = bool(cfg.autostart)
+        # 额外清理：hostname 和 listen_host 去除首尾空白，避免后续校验遗漏
+        cfg.hostname = cfg.hostname.strip()
+        cfg.listen_host = cfg.listen_host.strip()
         return cfg
 
     def copy(self) -> "TunnelConfig":
@@ -76,6 +79,8 @@ class TunnelConfig:
     # 别名，四个子命令共用一个 Action），--url 的 scheme 也只影响缺省值不影响行为，
     # 所以这里固定用 tcp，不必再把“协议类型”存进配置。
     def build_argv(self, binary: str) -> list[str]:
+        if not self.hostname or " " in self.hostname:
+            raise ValueError("无效的隧道主机名")
         argv = [
             binary,
             "access",
@@ -200,17 +205,21 @@ class TunnelProcess(GObject.Object):
         proc.wait_async(None, self._on_exit)
         GLib.timeout_add(2500, self._promote_running, proc)
 
-    def stop(self) -> None:
+    def stop(self, force: bool = False) -> None:
         proc = self._proc
         if proc is None:
             return
         self._stopping = True
         self._append("[正在断开…]")
         try:
-            proc.send_signal(signal.SIGTERM)
+            if force:
+                proc.force_exit()
+            else:
+                proc.send_signal(signal.SIGTERM)
         except Exception:  # noqa: BLE001  (非 Unix 平台)
             proc.force_exit()
-        GLib.timeout_add_seconds(5, self._force_kill, proc)
+        if not force:
+            GLib.timeout_add_seconds(5, self._force_kill, proc)
 
     # ------------------------------------------------------------ 回调
     def _force_kill(self, proc: Gio.Subprocess) -> bool:
@@ -247,7 +256,8 @@ class TunnelProcess(GObject.Object):
             low = text.lower()
             if "start websocket listener" in low or "listening on" in low:
                 self._set_state(STATE_RUNNING)
-            if " err " in f" {low} " or "level=error" in low or "error" in low[:40]:
+            # 更精确的错误检测：避免把包含 "error" 子串的普通信息误判
+            if " err " in f" {low} " or "level=error" in low or low.lstrip().startswith("error"):
                 self.last_error = text
         self._read_next(stream)
 
@@ -378,8 +388,8 @@ class TunnelManager(GObject.Object):
         def _norm_host(host: object) -> str:
             h = host if isinstance(host, str) else ""
             h = (h or "127.0.0.1").strip().lower() or "127.0.0.1"
-            # localhost 通常解析到 127.0.0.1（和 ::1），视为同一地址
-            if h == "localhost":
+            # localhost / ::1 通常解析到 127.0.0.1，视为同一地址，便于冲突检测
+            if h in ("localhost", "::1"):
                 h = "127.0.0.1"
             return h
 
@@ -393,11 +403,11 @@ class TunnelManager(GObject.Object):
                 continue
             have_host = _norm_host(running.listen_host)
             # 0.0.0.0 / :: 绑定所有地址，与任何具体地址都冲突
-            any_addrs = ("0.0.0.0", "::")
+            any_addrs = ("0.0.0.0", "::", "0:0:0:0:0:0:0:0")
             if have_host in any_addrs or want_host in any_addrs or have_host == want_host:
                 return p
         return None
 
-    def stop_all(self) -> None:
+    def stop_all(self, force: bool = False) -> None:
         for p in self.procs:
-            p.stop()
+            p.stop(force=force)
