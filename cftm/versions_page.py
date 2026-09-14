@@ -67,8 +67,9 @@ class ReleaseRow(Adw.ActionRow):
             self.progress.pulse()
             head = format_size(got) if got else "下载中…"
         else:
-            self.progress.set_fraction(fraction)
-            head = f"{fraction * 100:.0f}%"
+            clamped = max(0.0, min(1.0, fraction))
+            self.progress.set_fraction(clamped)
+            head = f"{clamped * 100:.0f}%"
         self.progress.set_text(f"{head} · {speed_text}" if speed_text else head)
         # 悬停提示：已下载 / 总大小 · 速度 · 剩余时间
         tips = []
@@ -168,7 +169,10 @@ class VersionsPage(Adw.PreferencesPage):
         sysbin = self.bm.system_binary()
         # 手改配置 / 外部删除目录后，active 可能指向不存在的版本或非法类型，
         # 此时没有任何单选被选中、界面很迷惑：静默纠正为自动模式。
-        valid_keys = {"latest-installed", "system", *installed}
+        # 注意：system 只有在 PATH 中真的存在时才算有效，否则应回退到自动
+        valid_keys = {"latest-installed", *installed}
+        if sysbin:
+            valid_keys.add("system")
         if not isinstance(active, str) or active not in valid_keys:
             active = "latest-installed"
             self.config.set("active_version", active)
@@ -246,11 +250,22 @@ class VersionsPage(Adw.PreferencesPage):
         dlg.present()
 
     def _open_dir(self, *_args) -> None:
+        # 确保目录存在，Flatpak 环境下可能尚未创建
+        try:
+            self.bm.versions_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
         uri = Gio.File.new_for_path(str(self.bm.versions_dir)).get_uri()
         try:
             Gio.AppInfo.launch_default_for_uri(uri, None)
         except GLib.Error as exc:
             self.win.toast(f"无法打开目录: {exc.message}")
+            # 兜底：尝试用 xdg-open
+            try:
+                import subprocess
+                subprocess.Popen(["xdg-open", str(self.bm.versions_dir)])
+            except Exception:
+                pass
 
     # ------------------------------------------------------------ 发布列表
     def _clear_release_widgets(self) -> None:
@@ -273,12 +288,18 @@ class VersionsPage(Adw.PreferencesPage):
         self.bm.fetch_releases(self._on_releases)
 
     def _on_releases(self, releases: Optional[list], error: Optional[str]) -> None:
-        self.refresh_btn.set_sensitive(True)
-        self.spinner.stop()
-        self.spinner.set_visible(False)
+        try:
+            self.refresh_btn.set_sensitive(True)
+            self.spinner.stop()
+            self.spinner.set_visible(False)
+        except Exception:
+            pass
         if error or not releases:
-            self._set_release_placeholder(f"获取失败：{error or '返回为空'}", "dialog-error-symbolic")
-            self.win.toast("获取 GitHub 版本列表失败")
+            try:
+                self._set_release_placeholder(f"获取失败：{error or '返回为空'}", "dialog-error-symbolic")
+                self.win.toast("获取 GitHub 版本列表失败")
+            except Exception:
+                pass
             self._install_after_fetch = False
             return
         self._clear_release_widgets()

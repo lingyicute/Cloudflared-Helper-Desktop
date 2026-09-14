@@ -26,12 +26,15 @@ GENERATED_MARK = "X-CFTM-Generated=true"
 
 def _xdg_data_home() -> Path:
     value = os.environ.get("XDG_DATA_HOME")
-    return Path(value) if value else Path.home() / ".local" / "share"
+    if not value or not value.strip():
+        return Path.home() / ".local" / "share"
+    return Path(value)
 
 
 def _xdg_data_dirs() -> list[Path]:
     value = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
-    return [Path(p) for p in value.split(":") if p]
+    # 过滤空字符串，避免 Path("") 产生 "."
+    return [Path(p) for p in value.split(":") if p and p.strip()]
 
 
 def in_flatpak() -> bool:
@@ -57,15 +60,39 @@ def launch_command() -> str:
     """返回当前程序的启动命令，用于 .desktop 文件的 Exec=。"""
     if getattr(sys, "frozen", False):  # PyInstaller 便携包
         return _quote_exec_arg(os.path.abspath(sys.executable))
-    main_py = Path(RESOURCE_DATA_DIR).parent / "main.py"
-    return f"{_quote_exec_arg(sys.executable)} {_quote_exec_arg(str(main_py))}"
+    # 尝试定位 main.py：优先使用 RESOURCE_DATA_DIR 的父目录，其次使用当前文件的祖先目录
+    candidates = [
+        Path(RESOURCE_DATA_DIR).parent / "main.py",
+        Path(__file__).resolve().parent.parent / "main.py",
+        Path.cwd() / "main.py",
+    ]
+    for main_py in candidates:
+        if main_py.is_file():
+            return f"{_quote_exec_arg(sys.executable)} {_quote_exec_arg(str(main_py))}"
+    # 回退：若找不到 main.py，直接使用 python -m cftm 方式（若包已安装）
+    return f"{_quote_exec_arg(sys.executable)} -m cftm"
+
+
+def _find_template_desktop() -> Path | None:
+    """在多个可能位置查找 .desktop 模板文件。"""
+    candidates = [
+        RESOURCE_DATA_DIR / DESKTOP_FILE_NAME,
+        Path(__file__).resolve().parent.parent / "data" / DESKTOP_FILE_NAME,
+        Path("/app/share/cftm/data") / DESKTOP_FILE_NAME,
+        Path("/app/share/applications") / DESKTOP_FILE_NAME,
+        Path("/usr/share/applications") / DESKTOP_FILE_NAME,
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    return None
 
 
 def _build_desktop_entry() -> str:
     """以 data/ 里的 .desktop 为模板，替换 Exec= 并补充 StartupWMClass=。"""
-    template = RESOURCE_DATA_DIR / DESKTOP_FILE_NAME
+    template = _find_template_desktop()
     lines: list[str] = []
-    if template.is_file():
+    if template and template.is_file():
         for line in template.read_text(encoding="utf-8").splitlines():
             if line.startswith(("Exec=", "StartupWMClass=", "X-CFTM-Generated=")):
                 continue
@@ -108,12 +135,19 @@ def install_icon() -> bool:
         return False
     target = _xdg_data_home() / "icons" / "hicolor" / "scalable" / "apps" / APP_ICON_FILE.name
     try:
-        if target.is_file() and target.read_bytes() == APP_ICON_FILE.read_bytes():
-            return False
+        if target.is_file():
+            try:
+                if target.read_bytes() == APP_ICON_FILE.read_bytes():
+                    return False
+            except OSError:
+                pass
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(APP_ICON_FILE, target)
         # 刷新 hicolor 目录的 mtime，让 GTK / 桌面环境放弃过期的 icon-theme.cache
-        os.utime(target.parents[2], None)
+        try:
+            os.utime(target.parents[2], None)
+        except OSError:
+            pass
         return True
     except OSError as exc:
         print(f"[desktop] 安装图标失败: {exc}", file=sys.stderr)

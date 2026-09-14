@@ -24,10 +24,17 @@ def _escape_shortcut(window: Gtk.Window) -> None:
 
 
 def copy_text(widget: Gtk.Widget, text: str) -> None:
-    provider = Gdk.ContentProvider.new_for_bytes(
-        "text/plain;charset=utf-8", GLib.Bytes.new(text.encode("utf-8"))
-    )
-    widget.get_clipboard().set_content(provider)
+    try:
+        clipboard = widget.get_clipboard()
+        if clipboard is None:
+            return
+        provider = Gdk.ContentProvider.new_for_bytes(
+            "text/plain;charset=utf-8", GLib.Bytes.new(text.encode("utf-8"))
+        )
+        clipboard.set_content(provider)
+    except Exception:
+        # 剪贴板操作失败不应导致崩溃，例如在无显示环境或窗口已销毁时
+        pass
 
 
 class TunnelDialog(Adw.Window):
@@ -112,8 +119,9 @@ class TunnelDialog(Adw.Window):
 
     def _on_save_clicked(self, *_args) -> None:
         hostname = self.host_row.get_text().strip()
-        if not hostname or " " in hostname:
-            self._toast("请输入有效的隧道主机名")
+        # 更严格的主机名校验：不能为空、不能含任何空白字符
+        if not hostname or any(c.isspace() for c in hostname):
+            self._toast("请输入有效的隧道主机名（不能包含空格）")
             self.host_row.grab_focus()
             return
         port = int(self.port_row.get_value())
@@ -130,11 +138,16 @@ class TunnelDialog(Adw.Window):
                 self._toast(f"额外参数格式错误: {exc}")
                 self.extra_row.grab_focus()
                 return
+        listen_host = self.listen_row.get_text().strip() or "127.0.0.1"
+        if any(c.isspace() for c in listen_host):
+            self._toast("监听地址不能包含空格")
+            self.listen_row.grab_focus()
+            return
         cfg = self.cfg
         cfg.name = self.name_row.get_text().strip()
         cfg.hostname = hostname
         cfg.port = port
-        cfg.listen_host = self.listen_row.get_text().strip() or "127.0.0.1"
+        cfg.listen_host = listen_host
         cfg.autostart = self.autostart_row.get_active()
         cfg.extra_args = extra_args
         self.on_save(cfg)

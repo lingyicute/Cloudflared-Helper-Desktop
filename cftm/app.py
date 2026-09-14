@@ -300,7 +300,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._prune_log_windows()
         for row in self._rows:
             row.dispose_row()
-            self.listbox.remove(row)
+            try:
+                self.listbox.remove(row)
+            except Exception:
+                # GTK4 中 remove 可能在行已 unparent 时抛异常，兜底尝试 unparent
+                try:
+                    row.unparent()
+                except Exception:
+                    pass
         self._rows.clear()
         for proc in self.manager.procs:
             row = TunnelRow(proc, self)
@@ -342,10 +349,11 @@ class MainWindow(Adw.ApplicationWindow):
         proc = self.manager.get(tunnel_id)
         if proc is None or proc.is_active():
             return False
-        # 对话框里拦过了，但手改 config.json 可能留下空 hostname：这里再兜底，
-        # 否则会拿 --hostname "" 去起进程，cloudflared 报错信息很迷惑。
-        if not proc.config.hostname.strip():
-            self.toast(f"「{proc.config.display_name}」缺少隧道主机名，请先编辑填写")
+        # 对话框里拦过了，但手改 config.json 可能留下空 hostname 或含空格：这里再兜底，
+        # 否则会拿 --hostname "" 或含空格的值去起进程，cloudflared 报错信息很迷惑。
+        hostname = proc.config.hostname.strip()
+        if not hostname or " " in hostname:
+            self.toast(f"「{proc.config.display_name}」的隧道主机名无效，请先编辑修正")
             return False
         binary = self.current_binary()
         if not binary:
@@ -374,11 +382,17 @@ class MainWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name("versions")
             return
         started = 0
+        already = 0
         for proc in self.manager.procs:
-            if not proc.is_active() and self.start_tunnel(proc.config.id):
+            if proc.is_active():
+                already += 1
+            elif self.start_tunnel(proc.config.id):
                 started += 1
         if started == 0:
-            self.toast("没有可启动的隧道")
+            if already == len(self.manager.procs):
+                self.toast("所有隧道已在运行中")
+            else:
+                self.toast("没有可启动的隧道")
 
     def stop_all(self) -> None:
         self.manager.stop_all()
@@ -388,7 +402,14 @@ class MainWindow(Adw.ApplicationWindow):
         if not targets or not self.current_binary():
             return False
         # start_tunnel 可能被端口冲突挡下来，按实际启动数汇报
-        started = sum(1 for proc in targets if self.start_tunnel(proc.config.id))
+        started = 0
+        for proc in targets:
+            try:
+                if self.start_tunnel(proc.config.id):
+                    started += 1
+            except Exception:
+                # 单个隧道启动失败不应影响其他
+                continue
         if started:
             self.toast(f"已自动连接 {started} 个隧道")
         return False
@@ -468,17 +489,33 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(done, version)
 
         def done(version: Optional[str]) -> bool:
-            if self._binary_path == path:
+            try:
+                # 窗口可能已在探测期间被销毁，避免访问已销毁的控件
+                if self._binary_path != path:
+                    return False
+                # 检查窗口是否仍有效
+                if not self.get_root():
+                    return False
                 self.binary_label.set_label(f"cloudflared {version or '(未知版本)'} · {path}")
                 self.versions_page.set_current(version, path)
+            except Exception:
+                pass
             return False
 
         threading.Thread(target=probe, daemon=True).start()
 
     # ------------------------------------------------------------ 关闭
     def _save_window_size(self) -> None:
-        self.config.set("window", {"width": self.get_width(), "height": self.get_height()})
-        self.config.save()
+        try:
+            w = self.get_width()
+            h = self.get_height()
+            # 窗口未实现或最小化时可能返回 0，过滤掉
+            if w > 0 and h > 0:
+                self.config.set("window", {"width": w, "height": h})
+                self.config.save()
+        except Exception:
+            # 获取尺寸失败时不保存，避免把 0 写入配置导致下次启动窗口过小
+            pass
 
     def _on_close_request(self, *_args) -> bool:
         running = len(self.manager.active())
@@ -562,7 +599,8 @@ class Application(Adw.Application):
         win.present()
 
     def do_shutdown(self) -> None:
-        self.manager.stop_all()
+        # 退出时强制结束所有隧道，避免 SIGTERM 后 5 秒强制杀的定时器因主循环已退出而不执行
+        self.manager.stop_all(force=True)
         Adw.Application.do_shutdown(self)
 
     def _on_quit(self, *_args) -> None:
