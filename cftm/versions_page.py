@@ -42,7 +42,7 @@ class ReleaseRow(Adw.ActionRow):
         prog_box.append(cancel_btn)
 
         done_box = Gtk.Box(spacing=4)
-        done_box.append(Gtk.Image.new_from_icon_name("emblem-ok-symbolic"))
+        done_box.append(Gtk.Image.new_from_icon_name("object-select-symbolic"))
         done_box.append(Gtk.Label(label="已安装"))
         done_box.add_css_class("success")
 
@@ -149,7 +149,7 @@ class VersionsPage(Adw.PreferencesPage):
         if path:
             self.current_row.set_title(f"cloudflared {version or '(版本未知)'}")
             self.current_row.set_subtitle(path)
-            self.current_icon.set_from_icon_name("emblem-ok-symbolic")
+            self.current_icon.set_from_icon_name("object-select-symbolic")
             self.current_row.remove_css_class("error")
         else:
             self.current_row.set_title("未找到可用的 cloudflared")
