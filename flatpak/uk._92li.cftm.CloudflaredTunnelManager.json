@@ -8,7 +8,10 @@
     "--share=ipc",
     "--socket=wayland",
     "--device=dri",
-    "--share=network"
+    "--share=network",
+    "--filesystem=xdg-config/cloudflared-tunnel-manager:create",
+    "--filesystem=xdg-data/cloudflared-tunnel-manager:create",
+    "--filesystem=xdg-cache:create"
   ],
   "modules": [
     {
@@ -16,7 +19,7 @@
       "buildsystem": "simple",
       "build-commands": [
         "mkdir -p /app/share/cftm /app/bin",
-        "cp -r cftm main.py /app/share/cftm/",
+        "cp -r cftm main.py data /app/share/cftm/",
         "printf '#!/bin/sh\\nexec python3 /app/share/cftm/main.py \"$@\"\\n' > /app/bin/cloudflared-tunnel-manager",
         "chmod 755 /app/bin/cloudflared-tunnel-manager",
         "install -Dm644 data/uk._92li.cftm.CloudflaredTunnelManager.desktop /app/share/applications/uk._92li.cftm.CloudflaredTunnelManager.desktop",
