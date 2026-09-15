@@ -24,10 +24,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             python3 python3-gi python3-gi-cairo \
-            gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-pango-1.0 libadwaita-1-0 xvfb
+            gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-pango-1.0 libadwaita-1-0 \
+            xvfb xdotool xclip
 
       - name: Byte-compile
-        run: python3 -m compileall -q cftm main.py
+        run: python3 -m compileall -q cftm main.py tests
+
+      - name: Unit tests (no display needed)
+        run: python3 tests/test_quick_tunnel.py
 
       - name: Import modules under virtual display
         run: |
@@ -37,6 +41,7 @@ jobs:
           gi.require_version("Adw", "1")
           from gi.repository import Adw, Gtk
           import cftm.app, cftm.binary_manager, cftm.tunnel, cftm.dialogs, cftm.versions_page
+          import cftm.quick_tunnel
           from cftm.tunnel import TunnelConfig
           cfg = TunnelConfig(hostname="ssh.example.com", port=2222)
           assert cfg.build_argv("cloudflared")[:3] == ["cloudflared", "access", "tcp"]
@@ -48,6 +53,15 @@ jobs:
           assert "mode" not in legacy.to_dict()
           print("OK", Adw.get_major_version(), Adw.get_minor_version(), Adw.get_micro_version())
           EOF
+
+      # 真跑一遍 UI：xdotool 制造“窗口获得焦点”、xclip 放剪贴板内容，断言
+      # 弹窗 → 点“是” → 预填好的新建对话框 → 敲端口回车保存 → 落盘。
+      - name: End-to-end test (clipboard quick tunnel)
+        run: xvfb-run -a python3 tests/e2e_quick_tunnel.py
+
+      # 共用的 TunnelDialog 被改动过，普通新建 / 编辑这条路径也要有人守着
+      - name: End-to-end test (tunnel dialog)
+        run: xvfb-run -a python3 tests/e2e_tunnel_dialog.py
 
   pyinstaller:
     name: PyInstaller (${{ matrix.arch }})
