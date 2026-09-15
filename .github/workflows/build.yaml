@@ -33,6 +33,15 @@ jobs:
       - name: Unit tests (no display needed)
         run: python3 tests/test_quick_tunnel.py
 
+      - name: Doctests (no display needed)
+        run: |
+          python3 - <<'EOF'
+          import doctest
+          import cftm.quick_tunnel as quick_tunnel
+          result = doctest.testmod(quick_tunnel)
+          raise SystemExit(1 if result.failed else 0)
+          EOF
+
       - name: Import modules under virtual display
         run: |
           xvfb-run -a python3 - <<'EOF'

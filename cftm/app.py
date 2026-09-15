@@ -458,7 +458,24 @@ class MainWindow(Adw.ApplicationWindow):
         """确认要连接剪贴板里的快速隧道：打开新建对话框，用户只需要补一个端口号。"""
         self.stack.set_visible_child_name("tunnels")
         cfg = TunnelConfig(hostname=hostname, name=quick_tunnel_name())
-        TunnelDialog(self, cfg, self._on_saved, is_new=True, focus_port=True).present()
+        saved = False
+
+        def on_save(new_cfg: TunnelConfig) -> None:
+            nonlocal saved
+            saved = True
+            self._on_saved(new_cfg)
+
+        dialog = TunnelDialog(self, cfg, on_save, is_new=True, focus_port=True)
+
+        def on_close_request(*_args) -> bool:
+            if not saved:
+                # 用户在预填对话框里点了“取消” / 按了 Esc：链接并没有被建出来，
+                # 把它移出 watcher 的“已处理”集合，下次切回窗口还会再问一次。
+                self.quick_tunnel.forget(hostname)
+            return False
+
+        dialog.connect("close-request", on_close_request)
+        dialog.present()
 
     # ------------------------------------------------------------ 编辑 / 删除
     def _open_editor(self, cfg: Optional[TunnelConfig]) -> None:
