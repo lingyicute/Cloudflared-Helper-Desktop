@@ -10,6 +10,8 @@
   <description>
     <p>A modern GTK4 / libadwaita desktop app for cloudflared access tunnels. Save any number of tunnels to reach any TCP service (SSH, RDP, SMB, ...), connect several of them at the same time, watch live logs, and manage cloudflared binaries downloaded straight from the official GitHub releases.</p>
     <p xml:lang="zh_CN">现代化的 GTK4 / libadwaita 桌面应用，用于管理 cloudflared access 隧道。可保存任意数量的 TCP 隧道，多条同时连接，实时查看日志，并直接从官方 GitHub Releases 下载和切换 cloudflared 版本。</p>
+    <p>Copy a *.trycloudflare.com quick tunnel link and switch back to the window: the app reads the clipboard when it gains focus and offers to create the tunnel for you, with the hostname and name already filled in — all that is left is a local port number.</p>
+    <p xml:lang="zh_CN">复制一条 *.trycloudflare.com 快速隧道链接，再切回本应用窗口：应用会在获得焦点时读取剪贴板并询问是否连接这条快速隧道，主机名与名称都已填好，只需要填一个本地端口号。</p>
   </description>
   <launchable type="desktop-id">uk._92li.cftm.CloudflaredTunnelManager.desktop</launchable>
   <url type="homepage">https://github.com/lingyicute/Cloudflared-Helper-Desktop</url>

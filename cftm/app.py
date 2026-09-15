@@ -23,6 +23,7 @@ from .config import (  # noqa: E402
     Config,
 )
 from .dialogs import LogWindow, TunnelDialog, copy_text  # noqa: E402
+from .quick_tunnel import QuickTunnelWatcher, quick_tunnel_name  # noqa: E402
 from .tunnel import (  # noqa: E402
     STATE_ERROR,
     STATE_LABELS,
@@ -183,6 +184,12 @@ class MainWindow(Adw.ApplicationWindow):
         self.manager.connect("tunnels-changed", lambda *_: self._rebuild_list())
         self.manager.connect("state-changed", self._on_state_changed)
         self.connect("close-request", self._on_close_request)
+        self.quick_tunnel = QuickTunnelWatcher(
+            self,
+            on_accept=self._quick_tunnel_accept,
+            is_enabled=self._quick_tunnel_enabled,
+            known_hostnames=self._quick_tunnel_hostnames,
+        )
 
         self._rebuild_list()
         self.on_binary_changed()
@@ -207,6 +214,7 @@ class MainWindow(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append("全部启动", "win.start-all")
         menu.append("全部停止", "win.stop-all")
+        menu.append("剪贴板快速新建", "win.clipboard-quick-tunnel")
         section = Gio.Menu()
         section.append("关于", "app.about")
         section.append("退出", "app.quit")
@@ -274,8 +282,17 @@ class MainWindow(Adw.ApplicationWindow):
         action.connect("activate", callback)
         self.add_action(action)
 
+    def _add_toggle_action(self, name: str, state: bool, callback) -> None:
+        """开关型动作：菜单里会显示成一个勾选项。"""
+        action = Gio.SimpleAction.new_stateful(name, None, GLib.Variant.new_boolean(bool(state)))
+        action.connect("change-state", callback)
+        self.add_action(action)
+
     def _setup_actions(self) -> None:
         self._add_action("new-tunnel", lambda *_: self._open_editor(None))
+        self._add_toggle_action(
+            "clipboard-quick-tunnel", self._quick_tunnel_enabled(), self._on_toggle_quick_tunnel
+        )
         self._add_action("start-all", lambda *_: self.start_all())
         self._add_action("stop-all", lambda *_: self.stop_all())
         self._add_action("tunnel-edit", lambda _a, p: self._edit(p.get_string()), "s")
@@ -414,6 +431,35 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast(f"已自动连接 {started} 个隧道")
         return False
 
+    # ------------------------------------------------------------ 剪贴板快速新建
+    def _quick_tunnel_enabled(self) -> bool:
+        return bool(self.config.get("clipboard_quick_tunnel", True))
+
+    def _quick_tunnel_hostnames(self) -> set:
+        """已配置过的隧道主机名：快速隧道的子域是随机且唯一的，命中就说明建过了。"""
+        return {
+            p.config.hostname.strip().lower()
+            for p in self.manager.procs
+            if p.config.hostname.strip()
+        }
+
+    def _on_toggle_quick_tunnel(self, action, value: GLib.Variant) -> None:
+        action.set_state(value)
+        enabled = value.get_boolean()
+        self.config.set("clipboard_quick_tunnel", enabled)
+        self.config.save()
+        self.toast(
+            "已开启：窗口获得焦点时检测剪贴板中的快速隧道链接"
+            if enabled
+            else "已关闭剪贴板快速新建"
+        )
+
+    def _quick_tunnel_accept(self, hostname: str) -> None:
+        """确认要连接剪贴板里的快速隧道：打开新建对话框，用户只需要补一个端口号。"""
+        self.stack.set_visible_child_name("tunnels")
+        cfg = TunnelConfig(hostname=hostname, name=quick_tunnel_name())
+        TunnelDialog(self, cfg, self._on_saved, is_new=True, focus_port=True).present()
+
     # ------------------------------------------------------------ 编辑 / 删除
     def _open_editor(self, cfg: Optional[TunnelConfig]) -> None:
         TunnelDialog(self, cfg, self._on_saved).present()
@@ -518,6 +564,7 @@ class MainWindow(Adw.ApplicationWindow):
             pass
 
     def _on_close_request(self, *_args) -> bool:
+        self.quick_tunnel.cancel_pending()
         running = len(self.manager.active())
         if running == 0 or self._force_close:
             self._save_window_size()
