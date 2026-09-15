@@ -5,6 +5,9 @@
 标题、初始焦点、鼠标点“保存”、以及编辑已有隧道时的行为。
 
     xvfb-run -a python3 tests/e2e_tunnel_dialog.py
+
+步骤驱动约定与 e2e_quick_tunnel.py 相同：步骤函数在条件尚未就绪时返回一个零参
+谓词，驱动每 50 ms 重跑该步骤，直到谓词为真或超过 4 s；否则返回 None 立即进入下一步。
 """
 from __future__ import annotations
 
@@ -22,10 +25,14 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import GLib, Gtk  # noqa: E402
 
 from cftm.app import Application  # noqa: E402
 from cftm.dialogs import TunnelDialog, _find_spin_button  # noqa: E402
+
+#: 条件轮询间隔 / 单步等待上限
+POLL_INTERVAL_MS = 50
+WAIT_TIMEOUT_MS = 4000
 
 FAILURES = []
 PASSED = []
@@ -72,9 +79,9 @@ class TestApp(Application):
         Application.do_activate(self)
         self.win = self.props.active_window
         self.steps = [
-            (500, self.s1_new), (400, self.s2_check_new), (300, self.s3_fill_and_save),
-            (500, self.s4_check_saved), (200, self.s5_edit), (400, self.s6_check_edit),
-            (300, self.s7_port_enter), (1100, self.s8_finish),
+            (500, self.s1_new), (100, self.s2_check_new), (300, self.s3_fill_and_save),
+            (100, self.s4_check_saved), (200, self.s5_edit), (100, self.s6_check_edit),
+            (300, self.s7_port_enter), (100, self.s8_finish),
         ]
         self.run_steps()
 
@@ -82,14 +89,29 @@ class TestApp(Application):
         if not self.steps:
             self.quit()
             return
-        delay, fn = self.steps.pop(0)
+        delay, fn = self.steps[0]
+        deadline = [0]
 
         def tick():
             try:
-                fn()
+                result = fn()
             except Exception as exc:
                 FAILURES.append(f"{fn.__name__} raised {exc!r}")
                 print(f"  FAIL  {fn.__name__} raised {exc!r}")
+                result = None
+            if callable(result):
+                now = GLib.get_monotonic_time()
+                if deadline[0] == 0:
+                    deadline[0] = now + WAIT_TIMEOUT_MS * 1000
+                if now >= deadline[0]:
+                    FAILURES.append(f"{fn.__name__}: 等待条件超时（{WAIT_TIMEOUT_MS} ms）")
+                    print(f"  FAIL  {fn.__name__}: 等待条件超时（{WAIT_TIMEOUT_MS} ms）")
+                    self.steps.pop(0)
+                    self.run_steps()
+                else:
+                    GLib.timeout_add(POLL_INTERVAL_MS, tick)
+                return False
+            self.steps.pop(0)
             self.run_steps()
             return False
 
@@ -101,9 +123,9 @@ class TestApp(Application):
 
     def s2_check_new(self):
         d = editors()
-        check(len(d) == 1, "打开了 1 个对话框", f"got {len(d)}")
-        if not d:
-            return
+        if len(d) != 1:
+            return lambda: len(editors()) == 1
+        print("[1-断言] 新建对话框内容正确")
         self.dlg = d[0]
         check(self.dlg.get_title() == "新建隧道", "标题是“新建隧道”", self.dlg.get_title())
         check(self.dlg.is_new is True, "is_new 仍按 config is None 推断为 True")
@@ -125,7 +147,9 @@ class TestApp(Application):
         find_button(self.dlg, "保存").emit("clicked")
 
     def s4_check_saved(self):
-        check(not editors(), "点“保存”后对话框关闭", f"still open: {len(editors())}")
+        if editors():
+            return lambda: not editors()
+        check(not editors(), "点“保存”后对话框关闭")
         check(len(self.manager.procs) == 1, "新增 1 条隧道", f"got {len(self.manager.procs)}")
         if self.manager.procs:
             cfg = self.manager.procs[0].config
@@ -136,13 +160,14 @@ class TestApp(Application):
 
     def s5_edit(self):
         print("[3] 编辑已有隧道")
-        self.win.lookup_action("tunnel-edit").activate(GLib.Variant.new_string(self.manager.procs[0].config.id))
+        self.win.lookup_action("tunnel-edit").activate(
+            GLib.Variant.new_string(self.manager.procs[0].config.id))
 
     def s6_check_edit(self):
         d = editors()
-        check(len(d) == 1, "打开了 1 个对话框", f"got {len(d)}")
-        if not d:
-            return
+        if len(d) != 1:
+            return lambda: len(editors()) == 1
+        print("[3-断言] 编辑对话框回填正确")
         self.dlg = d[0]
         check(self.dlg.get_title() == "编辑隧道", "标题是“编辑隧道”", self.dlg.get_title())
         check(self.dlg.is_new is False, "is_new 为 False")
@@ -156,11 +181,13 @@ class TestApp(Application):
         self.dlg.port_row.grab_focus()
         check(is_inside(self.dlg.get_focus(), self.dlg.port_row), "焦点能移到端口输入框",
               type(self.dlg.get_focus()).__name__)
-        # 窗口关闭是异步的（unmap 要等下一轮），所以 s8 留足时间
+        # 窗口关闭是异步的（unmap 要等下一轮），s8 用轮询等它真正消失
         GLib.timeout_add(250, lambda: (xdotool("key", "Return"), False)[1])
 
     def s8_finish(self):
-        check(not editors(), "回车后对话框关闭", f"still open: {len(editors())}")
+        if editors():
+            return lambda: not editors()
+        check(not editors(), "回车后对话框关闭")
         cfg = self.manager.procs[0].config
         check(cfg.port == 4455, "端口已更新", str(cfg.port))
         check(len(self.manager.procs) == 1, "没有多出一条隧道", f"got {len(self.manager.procs)}")

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+import sys
 import time
 from typing import Callable, Optional
 
@@ -18,16 +19,16 @@ from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 QUICK_TUNNEL_DOMAIN = "trycloudflare.com"
 
-# 剪贴板内容必须“整体就是”这条链接（允许协议头、端口、路径、以及一层包裹的引号/尖括号）。
-# 刻意不做“在一大段文本里搜链接”：复制一整段聊天记录时弹出一个确认框只会招人烦。
-# 结尾用 $ 收口，所以 x.trycloudflare.com.evil.com 这类后缀伪装不会命中。
+# 剪贴板内容必须“整体就是”这条链接（允许协议头、端口、路径 / 查询 / 锚点，以及一层
+# 包裹的引号/尖括号）。刻意不做“在一大段文本里搜链接”：复制一整段聊天记录时弹出一个
+# 确认框只会招人烦。结尾用 $ 收口，所以 x.trycloudflare.com.evil.com 这类后缀伪装不会命中。
 _QUICK_TUNNEL_RE = re.compile(
     r"""^
     (?:https?://)?                                        # 可选协议头
     (?P<host>(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+       # 至少一个子域标签
                trycloudflare\.com)
     (?::\d+)?                                             # 可选端口
-    (?:/[^\s]*)?                                          # 可选路径 / 查询
+    (?:[/?#][^\s]*)?                                      # 可选路径 / 查询 / 锚点
     $
     """,
     re.IGNORECASE | re.VERBOSE,
@@ -53,7 +54,13 @@ def parse_quick_tunnel_url(text: Optional[str]) -> Optional[str]:
 
     >>> parse_quick_tunnel_url("https://Foo-Bar.trycloudflare.com/")
     'foo-bar.trycloudflare.com'
+    >>> parse_quick_tunnel_url("https://x.trycloudflare.com?a=1#section")
+    'x.trycloudflare.com'
+    >>> parse_quick_tunnel_url("https://x.trycloudflare.com#section")
+    'x.trycloudflare.com'
     >>> parse_quick_tunnel_url("trycloudflare.com") is None
+    True
+    >>> parse_quick_tunnel_url("https://x.trycloudflare.com.evil.com") is None
     True
     """
     if not text:
@@ -83,7 +90,7 @@ class QuickTunnelWatcher:
       compositor 可能还没把剪贴板授权给本 surface，立刻读会失败；顺带把快速
       alt-tab 抖动合并掉。
     - 同一条链接一个会话只问一次：点了“否”之后再切回窗口不会被反复打扰。
-      已经配置过同名隧道的链接直接跳过。
+      已经配置过相同主机名隧道的链接直接跳过（快速隧道的子域随机且唯一）。
     """
 
     #: 获得焦点后延迟多久读剪贴板（毫秒）
@@ -105,10 +112,22 @@ class QuickTunnelWatcher:
         self._pending_id: int = 0
         self._dialog: Optional[Adw.MessageDialog] = None
 
-        self._controller = Gtk.EventControllerFocus()
-        self._controller.connect("enter", self._on_focus_enter)
-        self._controller.connect("leave", self._on_focus_leave)
-        window.add_controller(self._controller)
+        # window=None 是留给无显示环境单元测试的缝：只构造判定状态机，不接 GTK。
+        self._controller: Optional[Gtk.EventControllerFocus] = None
+        if window is not None:
+            self._controller = Gtk.EventControllerFocus()
+            self._controller.connect("enter", self._on_focus_enter)
+            self._controller.connect("leave", self._on_focus_leave)
+            window.add_controller(self._controller)
+
+    def forget(self, host: str) -> None:
+        """把一条链接重新标记为“未处理”，允许它再次触发询问。
+
+        用户在预填好的新建对话框里点了“取消”（而非“保存”）时调用：链接并没有被
+        真正建出来，不应被 :meth:`consider` 的“一个会话只问一次”吞掉，下次切回
+        窗口还应当再问一遍。
+        """
+        self._handled.discard(host)
 
     # ------------------------------------------------------------ 焦点
     def _on_focus_enter(self, *_args) -> None:
@@ -216,4 +235,15 @@ class QuickTunnelWatcher:
             return
         # 确认框此刻正在自行关闭，等下一个主循环迭代再开新建对话框，
         # 免得两个模态窗口的关闭 / 打开撞在一起。
-        GLib.idle_add(lambda: (self.on_accept(host), False)[1])
+        GLib.idle_add(self._open_editor, host)
+
+    def _open_editor(self, host: str) -> bool:
+        """确认框关闭后的下一轮主循环里打开新建对话框（返回 False 表示只执行一次）。"""
+        if not self._window_alive():
+            return False
+        try:
+            self.on_accept(host)
+        except Exception as exc:  # noqa: BLE001
+            # 锦上添花的功能，任何意外都不该打断主循环
+            print(f"[quick-tunnel] 打开新建对话框失败: {exc}", file=sys.stderr)
+        return False

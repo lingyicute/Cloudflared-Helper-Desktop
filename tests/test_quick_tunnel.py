@@ -13,7 +13,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cftm.quick_tunnel import parse_quick_tunnel_url, quick_tunnel_name  # noqa: E402
+from cftm.quick_tunnel import (  # noqa: E402
+    QuickTunnelWatcher,
+    parse_quick_tunnel_url,
+    quick_tunnel_name,
+)
 
 # (剪贴板内容, 应当识别出的主机名)
 SHOULD_MATCH = [
@@ -28,6 +32,10 @@ SHOULD_MATCH = [
     ("“https://x.trycloudflare.com”", "x.trycloudflare.com"),
     ("(https://x.trycloudflare.com)", "x.trycloudflare.com"),
     ("a1.trycloudflare.com\n", "a1.trycloudflare.com"),
+    ("https://x.trycloudflare.com#section", "x.trycloudflare.com"),          # 裸锚点
+    ("https://x.trycloudflare.com?a=1", "x.trycloudflare.com"),              # 裸查询串
+    ("https://x.trycloudflare.com/p?a=1#f", "x.trycloudflare.com"),          # 路径+查询+锚点
+    ("https://x.trycloudflare.com:8443/h?a=1#f", "x.trycloudflare.com"),     # 端口+全套后缀
 ]
 
 # 这些一律不该弹窗
@@ -47,7 +55,69 @@ SHOULD_REJECT = [
     "https://x.trycloudflare.com and https://y.trycloudflare.com",
     "file:///home/user/x.trycloudflare.com",
     "https://-x.trycloudflare.com",
+    "https://x.trycloudflare.com.evil.com#frag",   # 锚点不能成为后缀伪装的绕过
 ]
+
+
+def make_watcher(*, enabled: bool = True, known=()):
+    """构造一个不依赖显示环境的 watcher（window=None），记录 _ask / on_accept。"""
+    asked: list[str] = []
+    accepted: list[str] = []
+    watcher = QuickTunnelWatcher(
+        None,
+        accepted.append,
+        is_enabled=(lambda: enabled),
+        known_hostnames=(lambda: set(known)),
+    )
+    # 不走真正的弹窗 / 窗口存活检查，只记录“准备询问哪个主机名”
+    watcher._window_alive = lambda: True
+    watcher._ask = asked.append
+    return watcher, asked, accepted
+
+
+# QuickTunnelWatcher.consider() 状态机用例：(检查函数, 说明)
+def watcher_checks():
+    checks = []
+
+    # M3：已配置过相同主机名的隧道 -> 直接跳过，不弹确认框
+    w, asked, _ = make_watcher(known={"known-xyz.trycloudflare.com"})
+    got = w.consider("https://known-xyz.trycloudflare.com")
+    checks.append((got is None and not asked, "已建过相同主机名的链接不再询问"))
+
+    # 未建过的新链接 -> 弹出询问并返回主机名
+    w, asked, _ = make_watcher()
+    got = w.consider("https://brand-new.trycloudflare.com/path#frag")
+    checks.append((got == "brand-new.trycloudflare.com" and asked == ["brand-new.trycloudflare.com"],
+                   "新链接正常询问"))
+
+    # 同一条链接一个会话只问一次
+    again = w.consider("https://brand-new.trycloudflare.com")
+    checks.append((again is None and len(asked) == 1, "同一条链接不重复询问"))
+
+    # 确认框开着时，第二条链接不能被“已处理”集合吞掉
+    w._dialog = object()
+    second = w.consider("https://second-one.trycloudflare.com")
+    checks.append((second is None and "second-one.trycloudflare.com" not in w._handled,
+                   "确认框开着时不消耗第二条链接"))
+    w._dialog = None
+
+    # M2：forget() 之后，同一条链接允许再次询问（预填对话框被取消的场景）
+    w.forget("brand-new.trycloudflare.com")
+    reasked = w.consider("https://brand-new.trycloudflare.com")
+    checks.append((reasked == "brand-new.trycloudflare.com" and asked.count("brand-new.trycloudflare.com") == 2,
+                   "forget 后同一条链接可再次询问"))
+
+    # 功能开关关闭 -> 什么都不做
+    w, asked, _ = make_watcher(enabled=False)
+    got = w.consider("https://disabled-abc.trycloudflare.com")
+    checks.append((got is None and not asked, "开关关闭时不询问"))
+
+    # 普通文本 -> 不询问
+    w, asked, _ = make_watcher()
+    got = w.consider("这只是一段普通文本，不是链接")
+    checks.append((got is None and not asked, "普通文本不询问"))
+
+    return checks
 
 
 def main() -> int:
@@ -73,7 +143,13 @@ def main() -> int:
         failures += 1
         print("FAIL  name   -> 不传时间戳时应当用当前时间")
 
-    total = len(SHOULD_MATCH) + len(SHOULD_REJECT) + 2
+    watcher_results = watcher_checks()
+    for ok, label in watcher_results:
+        if not ok:
+            failures += 1
+            print(f"FAIL  watcher {label}")
+
+    total = len(SHOULD_MATCH) + len(SHOULD_REJECT) + 2 + len(watcher_results)
     print(f"test_quick_tunnel: {total - failures}/{total} passed")
     return 1 if failures else 0
 
