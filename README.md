@@ -6,6 +6,7 @@
 ## 功能
 
 - **多隧道并发**：保存任意数量的隧道，可同时连接多条；每条隧道独立的状态指示、启停按钮与实时日志。
+- **剪贴板快速新建**：窗口获得焦点时读取剪贴板，发现 `*.trycloudflare.com` 快速隧道链接就弹窗询问；点「是」直接唤出新建隧道对话框，主机名和名称（`yyyymmdd hh:mm:ss 快速隧道`）都已填好，**只需要填一个本地端口号**，回车即可保存。
 - **cloudflared 版本管理**
   - 自动识别系统/架构（`amd64` / `arm64` / `arm` / `386`，Linux 与 macOS）
   - 从 GitHub Releases 拉取版本列表，一键下载安装，显示下载进度，可取消
@@ -30,6 +31,23 @@ cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口
 > `access tcp` 这个子命令名从 cloudflared `2020.6.1` 起就有了（`2020.5.1` 及更早只有 `access ssh`，
 > 当时还没有 `tcp`）。应用内下载的版本来自官方 Releases 的最新 30 个，全部满足；只有手动把二进制指向
 > 2020 年之前的系统 PATH cloudflared 时，才需要改用 `access ssh`。然而，Cloudflare 官方仅支持一年以内的 cloudflared 版本，出于安全性上的考虑，梨不建议您使用如此古老的 cloudflared。
+
+## 剪贴板快速新建
+
+从别处复制一条 `cloudflared tunnel --url ...` 输出的快速隧道链接，切回本应用窗口即可：
+
+1. 窗口获得焦点后读取剪贴板，识别出 `*.trycloudflare.com` 链接就弹出「是否要连接这个快速隧道？」，链接居中展示。
+2. 点「是」唤出新建隧道对话框：主机名填好链接的主机名，名称也填好了 `yyyymmdd hh:mm:ss 快速隧道`，光标直接停在端口框上（默认值已全选）。
+3. 敲入本地端口号，回车即保存 —— 全程不用碰鼠标。
+
+几条刻意的约束，都是为了不招人烦：
+
+- **只认「整条剪贴板就是一个链接」**：允许协议头、端口、路径和一层包裹的引号 / 尖括号，但不会在一大段聊天记录里搜链接；`x.trycloudflare.com.evil.com` 这类后缀伪装也不会命中。
+- **同一条链接一个会话只问一次**：点过「否」之后再来回切窗口不会反复弹窗。
+- **已经建过同名隧道就不再问**（快速隧道的子域是随机且唯一的）。
+- **窗口内部换焦点不算「获得焦点」**：只有整个窗口拿到键盘焦点才会读剪贴板，并延迟 150 ms，避免 Wayland 下刚获得焦点就读不到剪贴板、以及 alt-tab 掠过的抖动。
+
+不想用可以在主菜单里关掉「剪贴板快速新建」，对应配置项 `clipboard_quick_tunnel`。
 
 ## 配置
 
@@ -60,7 +78,7 @@ python3 main.py
 
 | 作业 | 说明 |
 | --- | --- |
-| `check` | 字节编译 + 在 Xvfb 中导入全部模块，验证 GTK/Adw API |
+| `check` | 字节编译 + 单元测试 + 在 Xvfb 中导入全部模块，并跑两个端到端测试（剪贴板快速新建、隧道对话框） |
 | `pyinstaller` | 在 `ubuntu-24.04` / `ubuntu-24.04-arm` 上打包便携 tar.gz（x86_64、aarch64） |
 | `flatpak` | 使用 GNOME 50 运行时构建 `.flatpak` 包 |
 | `release` | 自动创建 GitHub Release 并上传所有产物 |
@@ -100,9 +118,11 @@ cftm/tunnel.py               隧道模型 + Gio.Subprocess 进程管理
 cftm/binary_manager.py       cloudflared 版本管理
 cftm/versions_page.py        版本管理页面
 cftm/dialogs.py              编辑对话框、日志窗口
+cftm/quick_tunnel.py         剪贴板快速隧道：焦点监听 + 链接识别 + 确认弹窗
 cftm/config.py               JSON 配置
 data/                        desktop / metainfo / 图标
 flatpak/                     Flatpak 清单
+tests/                       单元测试（无需显示）+ UI 端到端测试（Xvfb）
 .github/workflows/build.yaml CI / 发布流程
 index.html                   项目主页
 ```
