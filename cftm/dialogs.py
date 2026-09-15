@@ -23,6 +23,38 @@ def _escape_shortcut(window: Gtk.Window) -> None:
     window.add_controller(controller)
 
 
+def _walk(widget: Gtk.Widget):
+    """深度遍历一棵控件树（含自身）。"""
+    pending = [widget]
+    while pending:
+        node = pending.pop()
+        yield node
+        child = node.get_first_child()
+        while child is not None:
+            pending.append(child)
+            child = child.get_next_sibling()
+
+
+def _find_spin_button(widget: Gtk.Widget) -> Optional[Gtk.SpinButton]:
+    """找出 Adw.SpinRow 内部真正的 Gtk.SpinButton（用它来抓焦点）。"""
+    return next((n for n in _walk(widget) if isinstance(n, Gtk.SpinButton)), None)
+
+
+def _set_activates_default(widget: Gtk.Widget) -> None:
+    """给子树里所有支持 ``activates-default`` 的控件都打开它。
+
+    GTK 4.10 起 GtkSpinButton 是由内部的 Gtk.Text 组合出来的，键盘焦点实际落在那个
+    Gtk.Text 上：只给 GtkSpinButton 设 activates-default 按回车是没反应的（实测如此），
+    得设到内部 Gtk.Text 上。遍历子树就不用关心内部结构在不同 GTK 版本里长什么样。
+    """
+    for node in _walk(widget):
+        if hasattr(node, "set_activates_default"):
+            try:
+                node.set_activates_default(True)
+            except Exception:  # noqa: BLE001
+                pass
+
+
 def copy_text(widget: Gtk.Widget, text: str) -> None:
     try:
         clipboard = widget.get_clipboard()
@@ -38,16 +70,26 @@ def copy_text(widget: Gtk.Widget, text: str) -> None:
 
 
 class TunnelDialog(Adw.Window):
-    """新建 / 编辑隧道。"""
+    """新建 / 编辑隧道。
+
+    :param is_new: 显式声明这是“新建”还是“编辑”。默认按 ``config is None`` 推断；
+        从剪贴板快速新建时会传入一个已经填好主机名和名称的 ``TunnelConfig``，
+        此时必须显式传 ``is_new=True``，否则标题会变成“编辑隧道”。
+    :param focus_port: 把初始焦点放在端口上（并选中默认值）。快速新建时其余字段都
+        已填好，用户只需要输一个端口号。
+    """
 
     def __init__(
         self,
         parent: Gtk.Window,
         config: Optional[TunnelConfig],
         on_save: Callable[[TunnelConfig], None],
+        *,
+        is_new: Optional[bool] = None,
+        focus_port: bool = False,
     ):
         super().__init__(transient_for=parent, modal=True, default_width=540, default_height=560)
-        self.is_new = config is None
+        self.is_new = (config is None) if is_new is None else bool(is_new)
         self.cfg = config or TunnelConfig()
         self.on_save = on_save
         self.set_title("新建隧道" if self.is_new else "编辑隧道")
@@ -109,7 +151,35 @@ class TunnelDialog(Adw.Window):
         page.add(g_adv)
 
         self.set_content(view)
-        self.host_row.grab_focus()
+        self._wire_enter_to_save(save)
+        if focus_port:
+            self._focus_port_row()
+        else:
+            self.host_row.grab_focus()
+
+    def _wire_enter_to_save(self, save: Gtk.Button) -> None:
+        """让回车等于“保存”。
+
+        快速新建时用户输完端口号直接回车就行，不用再去够鼠标。所有输入行都是单行
+        控件，回车没有别的用途。
+        """
+        try:
+            self.set_default_widget(save)
+            for row in (self.name_row, self.host_row, self.listen_row, self.extra_row):
+                row.set_activates_default(True)
+            _set_activates_default(self.port_row)
+        except Exception:  # noqa: BLE001
+            # 回车保存只是便利功能，接不上也不影响用鼠标点“保存”
+            pass
+
+    def _focus_port_row(self) -> None:
+        """焦点落在端口上并选中默认值：用户直接敲数字即可覆盖。"""
+        spin = _find_spin_button(self.port_row)
+        (spin or self.port_row).grab_focus()
+        try:
+            self.port_row.select_region(0, -1)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _update_port_hint(self) -> None:
         self.port_hint.set_visible(int(self.port_row.get_value()) < 1024)

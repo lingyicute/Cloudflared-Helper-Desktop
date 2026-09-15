@@ -62,6 +62,7 @@ DEFAULTS: dict[str, Any] = {
     "active_version": "latest-installed",
     "tunnels": [],
     "window": {"width": 980, "height": 660},
+    "clipboard_quick_tunnel": True,
 }
 
 
