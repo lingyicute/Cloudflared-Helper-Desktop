@@ -68,11 +68,16 @@
   </section>
 
   <!-- Features -->
-  <section class="max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-3 gap-6">
+  <section class="max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
     <div class="rounded-2xl border border-white/5 bg-white/[0.02] p-6">
       <div class="text-orange-400 text-sm font-semibold mb-2">多隧道并发</div>
       <h3 class="text-lg font-bold mb-2">每条隧道一个独立进程</h3>
       <p class="text-zinc-400 text-sm">使用 Gio.Subprocess 管理 cloudflared 子进程，状态实时回传；端口冲突检测、失败自动提示并可直达日志。</p>
+    </div>
+    <div class="rounded-2xl border border-white/5 bg-white/[0.02] p-6">
+      <div class="text-orange-400 text-sm font-semibold mb-2">剪贴板快速新建</div>
+      <h3 class="text-lg font-bold mb-2">复制链接，切回来就好</h3>
+      <p class="text-zinc-400 text-sm">窗口获得焦点时读取剪贴板，认出 *.trycloudflare.com 就问一句要不要连；主机名与名称已填好，只填端口号，回车保存。</p>
     </div>
     <div class="rounded-2xl border border-white/5 bg-white/[0.02] p-6">
       <div class="text-orange-400 text-sm font-semibold mb-2">版本管理</div>
