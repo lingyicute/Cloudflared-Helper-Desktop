@@ -1,0 +1,2652 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloudflared Helper Desktop — 多条 Cloudflare 隧道，一个窗口搞定</title>
+<meta name="description" content="基于 Python 和 GTK4 的现代化桌面应用：保存任意数量的 cloudflared access 隧道，多条同时连接，一键切换 cloudflared 版本，剪贴板快速连接。">
+<meta property="og:title" content="Cloudflared Helper Desktop — 多条 Cloudflare 隧道，一个窗口搞定">
+<meta property="og:description" content="GTK4 / libadwaita 桌面应用：多隧道并发、剪贴板快速新建、cloudflared 版本管理。">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f1eeed">
+<link rel="icon" href="data:image/svg+xml,%3C?xml%20version=%221.0%22%20encoding=%22UTF-8%22?%3E%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22128%22%20height=%22128%22%20viewBox=%220%200%20128%20128%22%3E%3Cdefs%3E%3ClinearGradient%20id=%22bg%22%20x1=%220%22%20y1=%220%22%20x2=%221%22%20y2=%221%22%3E%3Cstop%20offset=%220%22%20stop-color=%22#ff9a3c%22/%3E%3Cstop%20offset=%221%22%20stop-color=%22#f26522%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20x=%228%22%20y=%228%22%20width=%22112%22%20height=%22112%22%20rx=%2238.158%22%20fill=%22url(#bg)%22%20ry=%2238.158%22/%3E%3Cpath%20d=%22M%2043.685%2071.387%20C%2035.462%2069.996%2031.829%2060.226%2037.144%2053.8%20C%2039.144%2051.382%2042.095%2049.951%2045.232%2049.876%20C%2047.664%2036.998%2063.123%2031.582%2073.059%2040.126%20C%2075.111%2041.89%2076.713%2044.118%2077.732%2046.626%20C%2087.262%2044.839%2095.154%2054.039%2091.936%2063.186%20C%2090.442%2067.432%2086.798%2070.558%2082.375%2071.387%20L%2043.685%2071.387%20Z%22%20fill=%22#fff%22%20opacity=%22.95%22%20style=%22%22/%3E%3Cpath%20d=%22M%2033.381%2085.205%20L%2093.974%2085.205%22%20stroke=%22#fff%22%20stroke-width=%226%22%20stroke-linecap=%22round%22%20opacity=%22.85%22%20style=%22%22/%3E%3Ccircle%20cx=%2243.48%22%20cy=%2285.205%22%20r=%224.208%22%20fill=%22#2ec27e%22%20style=%22%22/%3E%3Ccircle%20cx=%2263.677%22%20cy=%2285.205%22%20r=%224.208%22%20fill=%22#2ec27e%22%20style=%22%22/%3E%3Ccircle%20cx=%2283.875%22%20cy=%2285.205%22%20r=%224.208%22%20fill=%22#2ec27e%22%20style=%22%22/%3E%3C/svg%3E">
+<script>
+/* 提前应用持久化/系统主题，避免首帧闪烁 */
+(function () {
+  try {
+    var t = localStorage.getItem('cftm-theme');
+    if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+<noscript><style>.reveal{opacity:1 !important; transform:none !important}</style></noscript>
+<style>
+
+:root{
+  /* Typeface */
+  --md-ref-typeface-brand: "Google Sans", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --md-ref-typeface-plain: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --md-ref-typeface-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Shape scale */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-large-increased: 20px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-extra-large-increased: 32px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* Motion */
+  --md-sys-motion-easing-standard: cubic-bezier(.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized: cubic-bezier(.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(.05, .7, .1, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(.3, 0, .8, .15);
+  --md-sys-motion-easing-spring: cubic-bezier(.34, 1.3, .64, 1);
+  --md-sys-motion-duration-short3: 150ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium1: 250ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium4: 400ms;
+  --md-sys-motion-duration-long2: 500ms;
+
+  /* Elevation (M3 key light + ambient) */
+  --md-sys-elevation-level0: none;
+  --md-sys-elevation-level1: 0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15);
+  --md-sys-elevation-level2: 0 1px 2px rgba(0,0,0,.30), 0 2px 6px 2px rgba(0,0,0,.15);
+  --md-sys-elevation-level3: 0 1px 3px rgba(0,0,0,.30), 0 4px 8px 3px rgba(0,0,0,.15);
+  --md-sys-elevation-level4: 0 2px 3px rgba(0,0,0,.30), 0 6px 10px 4px rgba(0,0,0,.15);
+  --md-sys-elevation-level5: 0 4px 4px rgba(0,0,0,.30), 0 8px 12px 6px rgba(0,0,0,.15);
+
+  /* Layout */
+  --shell: 1240px;
+  --pad: clamp(20px, 4.5vw, 40px);
+  --sec-y: clamp(76px, 9vw, 132px);
+
+  /* --------------------------------------------------------------------------
+     M3 color roles — 静态兜底值。
+     由内置动态取色引擎（OKLCH → M3 色调）按应用图标橙 #F26522 生成，
+     JS 载入后会按所选强调色/深浅色实时覆盖这些变量。
+     -------------------------------------------------------------------------- */
+  --md-sys-color-primary: #8a3000;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #ffc5ae;
+  --md-sys-color-on-primary-container: #2c0700;
+  --md-sys-color-secondary: #704535;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #ecccbf;
+  --md-sys-color-on-secondary-container: #240e06;
+  --md-sys-color-tertiary: #5c5300;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ddd6a1;
+  --md-sys-color-on-tertiary-container: #191500;
+  --md-sys-color-error: #9d000d;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffc3bb;
+  --md-sys-color-on-error-container: #320000;
+  --md-sys-color-surface: #f1eeed;
+  --md-sys-color-on-surface: #181413;
+  --md-sys-color-surface-variant: #e1d0c9;
+  --md-sys-color-on-surface-variant: #49362e;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #eae6e5;
+  --md-sys-color-surface-container: #e4dfdd;
+  --md-sys-color-surface-container-high: #ded9d7;
+  --md-sys-color-surface-container-highest: #d8d2d0;
+  --md-sys-color-surface-dim: #d1cbc8;
+  --md-sys-color-surface-bright: #f1eeed;
+  --md-sys-color-outline: #7d655c;
+  --md-sys-color-outline-variant: #cbb5ad;
+  --md-sys-color-inverse-surface: #2b2523;
+  --md-sys-color-inverse-on-surface: #e7e2e1;
+  --md-sys-color-inverse-primary: #ff9e78;
+  --md-sys-color-scrim: rgba(0,0,0,.32);
+  --md-sys-color-surface-tint: #8a3000;
+
+  /* GTK/libadwaita mock 专用（复刻部分独立取色，不属于 M3 层） */
+  --adw-bg:#fafafa; --adw-header:#fafafa; --adw-card:#ffffff; --adw-shade:rgba(0,0,0,.07);
+  --adw-fg:rgba(0,0,0,.85); --adw-dim:rgba(0,0,0,.58); --adw-hover:rgba(0,0,0,.055);
+  --adw-press:rgba(0,0,0,.11); --adw-raised:rgba(0,0,0,.06); --adw-popover:#ffffff;
+  --adw-accent:#3584e4; --adw-accent-hover:#4a90e8; --adw-destructive:#e01b24;
+  --adw-warning:#c68a00; --adw-scroll:rgba(0,0,0,.22); --adw-entry:#ffffff;
+  --adw-shadow:0 12px 32px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.12);
+}
+html[data-theme="dark"]{
+  --md-sys-color-primary: #ff9e78;
+  --md-sys-color-on-primary: #471400;
+  --md-sys-color-primary-container: #672100;
+  --md-sys-color-on-primary-container: #ffc5ae;
+  --md-sys-color-secondary: #d9b0a0;
+  --md-sys-color-on-secondary: #3c1d11;
+  --md-sys-color-secondary-container: #563021;
+  --md-sys-color-on-secondary-container: #ecccbf;
+  --md-sys-color-tertiary: #c6bd77;
+  --md-sys-color-on-tertiary: #2d2800;
+  --md-sys-color-tertiary-container: #433c00;
+  --md-sys-color-on-tertiary-container: #ddd6a1;
+  --md-sys-color-error: #ff9b90;
+  --md-sys-color-on-error: #510002;
+  --md-sys-color-error-container: #750006;
+  --md-sys-color-on-error-container: #ffc3bb;
+  --md-sys-color-surface: #070504;
+  --md-sys-color-on-surface: #d8d2d0;
+  --md-sys-color-surface-variant: #49362e;
+  --md-sys-color-on-surface-variant: #cbb5ad;
+  --md-sys-color-surface-container-lowest: #020101;
+  --md-sys-color-surface-container-low: #181413;
+  --md-sys-color-surface-container: #1c1716;
+  --md-sys-color-surface-container-high: #25201e;
+  --md-sys-color-surface-container-highest: #2f2927;
+  --md-sys-color-surface-dim: #070504;
+  --md-sys-color-surface-bright: #342d2b;
+  --md-sys-color-outline: #998077;
+  --md-sys-color-outline-variant: #49362e;
+  --md-sys-color-inverse-surface: #d8d2d0;
+  --md-sys-color-inverse-on-surface: #2b2523;
+  --md-sys-color-inverse-primary: #8a3000;
+  --md-sys-color-scrim: rgba(0,0,0,.55);
+  --md-sys-color-surface-tint: #ff9e78;
+
+  --adw-bg:#242424; --adw-header:#303030; --adw-card:rgba(255,255,255,.08);
+  --adw-shade:rgba(255,255,255,.11); --adw-fg:rgba(255,255,255,.92);
+  --adw-dim:rgba(255,255,255,.62); --adw-hover:rgba(255,255,255,.08);
+  --adw-press:rgba(255,255,255,.14); --adw-raised:rgba(255,255,255,.06);
+  --adw-popover:#383838; --adw-accent:#5b9bf0; --adw-accent-hover:#6ea7f3;
+  --adw-destructive:#ff7b63; --adw-warning:#f5c211; --adw-scroll:rgba(255,255,255,.25);
+  --adw-entry:rgba(255,255,255,.07); --adw-shadow:0 18px 44px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.4);
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & base
+   -------------------------------------------------------------------------- */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
+body{
+  margin:0; min-height:100vh;
+  font-family:var(--md-ref-typeface-plain);
+  font-size:16px; line-height:1.6;
+  color:var(--md-sys-color-on-surface);
+  background:var(--md-sys-color-surface);
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4,p,figure,ul,ol{margin:0}
+ul,ol{padding:0; list-style:none}
+a{color:var(--md-sys-color-primary); text-decoration:none}
+a:hover{text-decoration:none}
+img,svg{display:block}
+button{font:inherit; color:inherit; border:0; background:none; cursor:pointer}
+input,textarea,select{font:inherit; color:inherit}
+:focus-visible{outline:3px solid var(--md-sys-color-primary); outline-offset:2px}
+::selection{background:color-mix(in srgb, var(--md-sys-color-primary) 26%, transparent)}
+
+/* Icon helpers */
+.ic{width:24px; height:24px; flex:none; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round}
+.ic.fill{fill:currentColor; stroke:none}
+.ic.s16{width:16px;height:16px}
+.ic.s18{width:18px;height:18px}
+.ic.s20{width:20px;height:20px}
+.ic.s28{width:28px;height:28px}
+/* 用 0×0 绝对定位隐藏雪碧图，而不用 display:none：
+   部分内核（Safari 等）不解析 display:none SVG 里的渐变，
+   会导致 <use> 图标只剩前景、渐变背景消失 */
+.sprite{position:absolute; width:0; height:0; overflow:hidden}
+
+/* code / kbd inline */
+code.mono{
+  font-family:var(--md-ref-typeface-mono); font-size:.88em; font-weight:500;
+  background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface);
+  padding:2px 8px; border-radius:6px;
+}
+
+/* --------------------------------------------------------------------------
+   3. Typography scale (M3)
+   -------------------------------------------------------------------------- */
+.display-large{font-family:var(--md-ref-typeface-brand); font-size:clamp(36px,5.2vw,57px); line-height:1.12; font-weight:400; letter-spacing:-.25px}
+.display-medium{font-family:var(--md-ref-typeface-brand); font-size:clamp(32px,4.2vw,45px); line-height:1.16; font-weight:400; letter-spacing:0}
+.display-small{font-family:var(--md-ref-typeface-brand); font-size:clamp(26px,3vw,36px); line-height:1.22; font-weight:400; letter-spacing:0}
+.headline-large{font-family:var(--md-ref-typeface-brand); font-size:clamp(26px,3.2vw,32px); line-height:1.25; font-weight:400; letter-spacing:0}
+.headline-medium{font-family:var(--md-ref-typeface-brand); font-size:clamp(24px,2.8vw,28px); line-height:1.28; font-weight:400; letter-spacing:0}
+.title-large{font-family:var(--md-ref-typeface-brand); font-size:22px; line-height:28px; font-weight:400; letter-spacing:0}
+.title-medium{font-size:16px; line-height:24px; font-weight:500; letter-spacing:.15px}
+.title-small{font-size:14px; line-height:20px; font-weight:500; letter-spacing:.1px}
+.label-large{font-size:14px; line-height:20px; font-weight:500; letter-spacing:.1px}
+.label-medium{font-size:12px; line-height:16px; font-weight:500; letter-spacing:.5px}
+.body-large{font-size:16px; line-height:24px; font-weight:400; letter-spacing:.15px}
+.body-medium{font-size:14px; line-height:20px; font-weight:400; letter-spacing:.25px}
+.body-small{font-size:12px; line-height:16px; font-weight:400; letter-spacing:.4px}
+
+/* --------------------------------------------------------------------------
+   4. Layout primitives
+   -------------------------------------------------------------------------- */
+.shell{width:100%; max-width:var(--shell); margin-inline:auto; padding-inline:var(--pad)}
+section{scroll-margin-top:88px}
+.band{padding-block:var(--sec-y)}
+.band--tint{background:var(--md-sys-color-surface-container-low)}
+.band--deep{background:var(--md-sys-color-surface-container)}
+
+.sec-head{max-width:800px; margin-bottom:clamp(36px,5vw,60px); display:flex; flex-direction:column; gap:18px; align-items:flex-start}
+.sec-head.center{margin-inline:auto; align-items:center; text-align:center}
+.sec-title{font-family:var(--md-ref-typeface-brand); font-size:clamp(27px,3.6vw,38px); line-height:1.22; font-weight:400; letter-spacing:0; color:var(--md-sys-color-on-surface); text-wrap:balance}
+.sec-sub{font-size:clamp(15px,1.6vw,17px); line-height:1.75; color:var(--md-sys-color-on-surface-variant); max-width:66ch; letter-spacing:.15px}
+
+/* Overline pill（小节眉标） */
+.eyebrow{
+  display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 16px;
+  border-radius:var(--md-sys-shape-corner-full);
+  background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container);
+  font-size:14px; font-weight:500; letter-spacing:.1px; line-height:20px;
+}
+.eyebrow .ic{width:18px;height:18px}
+.eyebrow--tert{background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container)}
+
+/* --------------------------------------------------------------------------
+   5. M3 Buttons（40dp 基准；state layer 8%/10%/12%）
+   -------------------------------------------------------------------------- */
+.m3-btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  height:40px; padding:0 24px; border-radius:var(--md-sys-shape-corner-full);
+  font-size:14px; font-weight:500; line-height:20px; letter-spacing:.1px;
+  position:relative; overflow:hidden; white-space:nowrap; user-select:none;
+  transition:box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             transform 120ms var(--md-sys-motion-easing-emphasized);
+}
+.m3-btn::after{content:""; position:absolute; inset:0; border-radius:inherit; background:currentColor; opacity:0; transition:opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard)}
+.m3-btn:hover::after{opacity:.08}
+.m3-btn:focus-visible::after{opacity:.10}
+.m3-btn:active::after{opacity:.10}
+.m3-btn:active{transform:scale(.98)}
+.m3-btn .ic{width:18px;height:18px}
+.m3-btn.filled{background:var(--md-sys-color-primary); color:var(--md-sys-color-on-primary)}
+.m3-btn.filled:hover{box-shadow:var(--md-sys-elevation-level1)}
+.m3-btn.tonal{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
+.m3-btn.tonal:hover{box-shadow:var(--md-sys-elevation-level1)}
+.m3-btn.elevated{background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-primary); box-shadow:var(--md-sys-elevation-level1)}
+.m3-btn.elevated:hover{box-shadow:var(--md-sys-elevation-level2)}
+.m3-btn.outlined{border:1px solid var(--md-sys-color-outline); color:var(--md-sys-color-primary); background:transparent}
+.m3-btn.text{color:var(--md-sys-color-primary); padding:0 16px}
+.m3-btn.large{height:52px; padding:0 28px; font-size:15px; gap:10px}
+.m3-btn.large .ic{width:20px;height:20px}
+.m3-btn[disabled],.m3-btn[aria-disabled="true"]{opacity:.45; pointer-events:none}
+
+/* M3 Icon button */
+.m3-icon-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:40px; height:40px; border-radius:var(--md-sys-shape-corner-full);
+  color:var(--md-sys-color-on-surface-variant);
+  position:relative; overflow:hidden; flex:none;
+  transition:background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.m3-icon-btn::after{content:""; position:absolute; inset:0; border-radius:inherit; background:currentColor; opacity:0; transition:opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard)}
+.m3-icon-btn:hover::after{opacity:.08}
+.m3-icon-btn:active::after{opacity:.10}
+.m3-icon-btn .ic{width:20px;height:20px}
+.m3-icon-btn.tonal{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
+.m3-icon-btn.outlined{border:1px solid var(--md-sys-color-outline-variant)}
+.m3-icon-btn.filled{background:var(--md-sys-color-primary); color:var(--md-sys-color-on-primary)}
+
+/* --------------------------------------------------------------------------
+   6. M3 Chips（8dp 圆角）
+   -------------------------------------------------------------------------- */
+.m3-chip{
+  display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 16px;
+  border-radius:var(--md-sys-shape-corner-small);
+  font-size:14px; font-weight:500; line-height:20px; letter-spacing:.1px;
+  color:var(--md-sys-color-on-surface-variant); background:transparent;
+  border:1px solid var(--md-sys-color-outline-variant);
+  white-space:nowrap; position:relative; overflow:hidden; user-select:none;
+  transition:background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.m3-chip::after{content:""; position:absolute; inset:0; background:currentColor; opacity:0; transition:opacity var(--md-sys-motion-duration-short3)}
+.m3-chip:hover::after{opacity:.08}
+.m3-chip .ic{width:18px;height:18px}
+.m3-chip.suggestion{border-color:transparent; background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface)}
+.m3-chip.selected{border-color:transparent; background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
+button.m3-chip{cursor:pointer}
+
+/* --------------------------------------------------------------------------
+   7. M3 Code block（inverse surface 容器）
+   -------------------------------------------------------------------------- */
+.code-block{
+  position:relative; background:var(--md-sys-color-inverse-surface); color:var(--md-sys-color-inverse-on-surface);
+  border-radius:var(--md-sys-shape-corner-large); padding:18px 56px 18px 22px; overflow-x:auto;
+  border:1px solid color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 10%, transparent);
+}
+.code-block pre{margin:0; font-family:var(--md-ref-typeface-mono); font-size:13px; line-height:1.75; white-space:pre; letter-spacing:0}
+.code-block .cmt{color:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 58%, transparent)}
+.code-block .cp{
+  position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:10px;
+  display:grid; place-items:center; color:var(--md-sys-color-inverse-on-surface);
+  transition:background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.code-block .cp:hover{background:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 12%, transparent)}
+.code-block .cp:active{background:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 16%, transparent)}
+.code-block .cp .ic{width:18px;height:18px}
+
+/* --------------------------------------------------------------------------
+   8. Top app bar
+   -------------------------------------------------------------------------- */
+.topbar{
+  position:sticky; top:0; z-index:80;
+  background:color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  backdrop-filter:blur(18px) saturate(1.4);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);
+  border-bottom:1px solid transparent;
+  transition:background-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             border-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.topbar.scrolled{
+  background:color-mix(in srgb, var(--md-sys-color-surface-container) 92%, transparent);
+  border-bottom-color:var(--md-sys-color-outline-variant);
+}
+.topbar-in{
+  display:flex; align-items:center; gap:12px; height:64px;
+  max-width:var(--shell); margin-inline:auto; padding-inline:var(--pad);
+}
+.brand{display:flex; align-items:center; gap:12px; color:var(--md-sys-color-on-surface)}
+.brand-icon{width:40px;height:40px;border-radius:var(--md-sys-shape-corner-medium);flex:none; overflow:hidden; display:grid; place-items:center; background:var(--md-sys-color-primary-container)}
+.brand-icon svg{width:40px;height:40px}
+.brand-name{font-family:var(--md-ref-typeface-brand); font-size:21px; line-height:28px; font-weight:400; white-space:nowrap; letter-spacing:0}
+.brand-badge{
+  font-size:11px; font-weight:500; letter-spacing:.5px; line-height:16px;
+  padding:3px 10px; border-radius:var(--md-sys-shape-corner-full);
+  background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container);
+}
+.nav{display:flex; align-items:center; gap:4px; margin-inline:auto}
+.nav a{
+  padding:0 16px; height:40px; display:inline-flex; align-items:center;
+  border-radius:var(--md-sys-shape-corner-full);
+  font-size:14px; font-weight:500; letter-spacing:.1px;
+  color:var(--md-sys-color-on-surface-variant);
+  transition:background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+  position:relative; overflow:hidden;
+}
+.nav a::after{content:""; position:absolute; inset:0; background:currentColor; opacity:0; transition:opacity var(--md-sys-motion-duration-short3); border-radius:inherit}
+.nav a:hover::after{opacity:.08}
+.nav a:hover{color:var(--md-sys-color-on-surface)}
+.nav a.active{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
+.topbar-actions{display:flex; align-items:center; gap:8px}
+.gh-btn{
+  display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 20px;
+  border-radius:var(--md-sys-shape-corner-full);
+  font-size:14px; font-weight:500; letter-spacing:.1px;
+  background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container);
+  position:relative; overflow:hidden;
+  transition:box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.gh-btn::after{content:""; position:absolute; inset:0; background:currentColor; opacity:0; transition:opacity var(--md-sys-motion-duration-short3); border-radius:inherit}
+.gh-btn:hover::after{opacity:.08}
+.gh-btn:hover{box-shadow:var(--md-sys-elevation-level1)}
+.gh-btn .ic{width:18px;height:18px}
+.nav-toggle{display:none}
+
+/* --------------------------------------------------------------------------
+   9. Hero（M3 Expressive：display 大字 + 色块 + 图标悬浮件）
+   -------------------------------------------------------------------------- */
+.hero{position:relative; overflow:hidden; padding-block:clamp(48px,7vw,92px) clamp(44px,6vw,80px)}
+.hero-bg{position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+.hero-bg::before{
+  content:""; position:absolute; width:min(72vw,920px); aspect-ratio:1; border-radius:50%;
+  top:-42%; right:-16%;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--md-sys-color-primary-container) 88%, transparent), transparent 74%);
+}
+.hero-bg::after{
+  content:""; position:absolute; width:min(56vw,720px); aspect-ratio:1; border-radius:50%;
+  bottom:-46%; left:-14%;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--md-sys-color-tertiary-container) 66%, transparent), transparent 72%);
+}
+.hero-grid{position:relative; z-index:1; display:grid; grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr); gap:clamp(28px,4vw,64px); align-items:center}
+.hero-copy{display:flex; flex-direction:column; gap:24px; align-items:flex-start}
+
+.hero-title{
+  font-family:var(--md-ref-typeface-brand);
+  font-size:clamp(36px,5.2vw,56px); line-height:1.12; font-weight:400; letter-spacing:-.02em;
+  color:var(--md-sys-color-on-surface); text-wrap:balance; margin:0;
+}
+.hero-title strong{font-weight:500; color:var(--md-sys-color-primary); letter-spacing:-.03em}
+.hero-sub{font-size:clamp(16px,1.7vw,18px); line-height:1.75; color:var(--md-sys-color-on-surface-variant); max-width:60ch; font-weight:400; letter-spacing:.15px}
+.hero-sub .mono{font-family:var(--md-ref-typeface-mono); font-size:.9em; background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface); padding:2px 8px; border-radius:6px; font-weight:500}
+.hero-sub mark{background:linear-gradient(transparent 62%, color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent) 62%); color:inherit; padding:0 2px; font-weight:500}
+
+.hero-cta{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+.hero-chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:2px}
+.hero-note{font-size:13px; line-height:20px; color:var(--md-sys-color-on-surface-variant); display:flex; align-items:center; gap:8px; font-weight:400; letter-spacing:.25px}
+.hero-note .ic{width:16px;height:16px; color:var(--md-sys-color-primary)}
+
+.hero-visual{position:relative; display:flex; justify-content:center; align-items:center}
+.appicon-wrap{position:relative; width:min(340px,64vw); aspect-ratio:1; display:grid; place-items:center}
+.appicon-wrap::before{
+  content:""; position:absolute; inset:8%; border-radius:50%;
+  background:conic-gradient(from 210deg, var(--md-sys-color-primary-container), var(--md-sys-color-tertiary-container), var(--md-sys-color-secondary-container), var(--md-sys-color-primary-container));
+  filter:blur(36px); opacity:.75;
+}
+.appicon{position:relative; width:56%; border-radius:28%; box-shadow:var(--md-sys-elevation-level3), 0 24px 64px color-mix(in srgb, var(--md-sys-color-primary) 30%, rgba(0,0,0,.22))}
+.orbit{position:absolute; inset:0; border-radius:50%; border:1.5px dashed color-mix(in srgb, var(--md-sys-color-outline) 46%, transparent); animation:spin 52s linear infinite}
+.orbit.o2{inset:12%; animation-duration:36s; animation-direction:reverse; border-color:color-mix(in srgb, var(--md-sys-color-outline) 32%, transparent)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.orbit-chip{
+  position:absolute; display:flex; align-items:center; gap:6px; height:34px; padding:0 14px;
+  border-radius:var(--md-sys-shape-corner-full);
+  background:var(--md-sys-color-surface-container-lowest);
+  box-shadow:var(--md-sys-elevation-level2); border:1px solid var(--md-sys-color-outline-variant);
+  font-size:13px; font-weight:500; letter-spacing:.1px; color:var(--md-sys-color-on-surface); white-space:nowrap;
+}
+.orbit-chip .ic{width:16px;height:16px; color:var(--md-sys-color-primary)}
+.oc1{top:4%; left:-6%; animation:float 7s ease-in-out infinite}
+.oc2{bottom:10%; right:-8%; animation:float 8.5s ease-in-out infinite .6s}
+.oc3{top:56%; left:-12%; animation:float 9.5s ease-in-out infinite 1.2s}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+/* --------------------------------------------------------------------------
+   10. Stats（elevated card + 内嵌分隔线）
+   -------------------------------------------------------------------------- */
+.stats{
+  position:relative; z-index:1;
+  display:grid; grid-template-columns:repeat(4,1fr);
+  background:var(--md-sys-color-surface-container-low);
+  border-radius:var(--md-sys-shape-corner-extra-large);
+  box-shadow:var(--md-sys-elevation-level1);
+  overflow:hidden; margin-top:clamp(44px,6vw,72px);
+}
+.stat{
+  padding:24px 26px 22px; display:flex; align-items:flex-start; gap:14px;
+  transition:background-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.stat + .stat{border-left:1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 62%, transparent)}
+.stat:hover{background:var(--md-sys-color-surface-container)}
+.stat-ic{
+  width:44px; height:44px; border-radius:var(--md-sys-shape-corner-full); flex:none;
+  display:grid; place-items:center;
+  background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container);
+}
+.stat:nth-child(2) .stat-ic{background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container)}
+.stat:nth-child(3) .stat-ic{background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container)}
+.stat:nth-child(4) .stat-ic{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
+.stat-ic .ic{width:22px;height:22px}
+.stat-txt{display:flex; flex-direction:column; gap:2px; min-width:0}
+.stat-txt b{font-family:var(--md-ref-typeface-brand); font-size:27px; font-weight:400; line-height:1.2; color:var(--md-sys-color-on-surface); font-variant-numeric:tabular-nums; letter-spacing:0}
+.stat-txt span{font-size:13px; line-height:19px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
+
+/* --------------------------------------------------------------------------
+   11. Preview 区：分区标题 / 演示工具条 / 舞台
+   -------------------------------------------------------------------------- */
+.demo-toolbar{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px;
+  padding:12px 16px 12px 20px; margin-bottom:20px;
+  border-radius:var(--md-sys-shape-corner-extra-large);
+  background:var(--md-sys-color-surface-container-high);
+}
+.dt-hint{display:flex; align-items:center; gap:10px; font-size:14px; line-height:20px; color:var(--md-sys-color-on-surface-variant); margin-right:auto; letter-spacing:.1px; min-width:0}
+.dt-hint .ic{width:20px;height:20px;color:var(--md-sys-color-primary)}
+.dt-hint b{color:var(--md-sys-color-on-surface); font-weight:600}
+.dt-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.dt-sep{width:1px; height:28px; background:var(--md-sys-color-outline-variant); margin-inline:4px}
+.seed-label{display:flex; align-items:center; gap:6px; font-size:13px; font-weight:500; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
+.seed-label .ic{width:18px;height:18px}
+.seed-dots{display:flex; align-items:center; gap:8px}
+.seed{
+  width:30px; height:30px; border-radius:50%; border:2px solid transparent;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.45), 0 1px 3px rgba(0,0,0,.18);
+  transition:transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-spring),
+             box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+  position:relative; cursor:pointer;
+}
+.seed:hover{transform:scale(1.1)}
+.seed:active{transform:scale(.96)}
+.seed[aria-pressed="true"]{box-shadow:0 0 0 2px var(--md-sys-color-surface-container-high), 0 0 0 4px currentColor, 0 2px 6px rgba(0,0,0,.2)}
+
+/* ==========================================================================
+   12. GTK/libadwaita 界面复刻（保持原实现的独立取色体系）
+   ========================================================================== */
+.stage{position:relative; width:100%; background:var(--md-sys-color-surface-container-lowest); border-radius:var(--md-sys-shape-corner-extra-large); padding:16px; border:1px solid var(--md-sys-color-outline-variant); box-shadow:var(--md-sys-elevation-level1)}
+.stage-scroll{position:relative; width:100%; height:100%; overflow:hidden; border-radius:var(--md-sys-shape-corner-large)}
+.stage-inner{position:absolute; top:0; left:0; width:1100px; height:780px; padding:60px; transform-origin:top left}
+.stage.small .stage-scroll{overflow-x:auto; overflow-y:hidden}
+.mock-hint-small{display:none; font-size:13px; color:var(--md-sys-color-on-surface-variant); align-items:center; gap:8px; margin-top:12px; justify-content:center; font-weight:500}
+.stage.small ~ .mock-hint-small{display:flex}
+
+/* ==========================================================================
+   Mock - Keep excellent GTK reproduction
+   ========================================================================== */
+.mock{
+  position:relative; width:980px; height:660px;
+  background:var(--adw-bg); border-radius:12px; box-shadow:var(--adw-shadow);
+  display:flex; flex-direction:column;
+  color:var(--adw-fg); font-size:14px; line-height:1.4;
+  overflow:hidden; user-select:none; -webkit-user-select:none;
+}
+.mock,.mock *{font-family:var(--md-ref-typeface-plain)}
+.mock-body{position:relative; flex:1; min-height:0; display:flex; flex-direction:column; border-radius:0 0 12px 12px; overflow:hidden}
+.mock-titlebar{height:47px; flex:none; display:flex; align-items:center; gap:6px; padding:0 6px; background:var(--adw-header); position:relative; z-index:20; transition:box-shadow .2s ease}
+.mock-titlebar::after{content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--adw-shade); opacity:.9}
+.mock.scrolled .mock-titlebar{box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.tb-btn{width:34px;height:34px; flex:none; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; color:var(--adw-fg); transition:background-color .15s ease}
+.tb-btn:hover{background:var(--adw-hover)}
+.tb-btn:active{background:var(--adw-press)}
+.tb-btn.round{border-radius:50%}
+.tb-btn .ic{width:16px;height:16px;stroke-width:2.1}
+.tb-spacer{flex:1}
+.viewswitcher{display:flex; align-items:center; gap:2px; height:34px; padding:2px; background:var(--adw-raised); border-radius:9px}
+.viewswitcher button{display:flex; align-items:center; gap:8px; height:30px; padding:0 12px; border-radius:7px; font-size:14px; font-weight:500; color:var(--adw-fg); transition:background-color .18s ease, box-shadow .18s ease}
+.viewswitcher button .ic{width:16px;height:16px}
+.viewswitcher button:hover{background:var(--adw-hover)}
+.viewswitcher button[aria-selected="true"]{background:var(--adw-card); box-shadow:0 1px 2px rgba(0,0,0,.10), 0 0 0 1px rgba(0,0,0,.04)}
+html[data-theme="dark"] .viewswitcher button[aria-selected="true"]{box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.page{flex:1; min-height:0; display:none; flex-direction:column}
+.page.active{display:flex}
+.scroller{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; scrollbar-gutter:stable}
+.scroller::-webkit-scrollbar{width:10px;height:10px}
+.scroller::-webkit-scrollbar-thumb{background:var(--adw-scroll); border-radius:9px; border:2px solid transparent; background-clip:content-box}
+.scroller::-webkit-scrollbar-thumb:hover{background:var(--adw-fg); background-clip:content-box}
+.scroller::-webkit-scrollbar-track{background:transparent}
+.clamp{max-width:880px; margin:0 auto; padding:20px 18px 28px; display:flex; flex-direction:column; gap:16px}
+.toolbar-head{display:flex; align-items:center; gap:8px}
+.toolbar-head .labels{flex:1; min-width:0; display:flex; flex-direction:column}
+.h1{font-size:19px; font-weight:800; letter-spacing:-.01em}
+.caption{font-size:12px; color:var(--adw-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.gtk-btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; height:34px; padding:0 16px; border-radius:9px; font-size:14px; font-weight:500; color:var(--adw-fg); background:var(--adw-raised); transition:background-color .15s ease, filter .15s ease}
+.gtk-btn:hover{background:var(--adw-press)}
+.gtk-btn.flat{background:transparent}
+.gtk-btn.flat:hover{background:var(--adw-hover)}
+.gtk-btn.suggested{background:var(--adw-accent); color:#fff}
+.gtk-btn.suggested:hover{background:var(--adw-accent-hover)}
+.gtk-btn.destructive{background:var(--adw-destructive); color:#fff}
+.gtk-btn.pill{border-radius:999px}
+.gtk-btn[disabled],.gtk-btn[aria-disabled="true"]{opacity:.5; pointer-events:none}
+.gtk-btn.icon{width:34px; padding:0}
+.gtk-btn.icon .ic{width:16px;height:16px}
+.boxed-list{background:var(--adw-card); border-radius:12px; overflow:hidden; box-shadow:0 0 0 1px rgba(0,0,0,.05)}
+html[data-theme="dark"] .boxed-list{box-shadow:none}
+.row{display:flex; align-items:center; gap:12px; padding:9px 12px; min-height:62px; transition:background-color .15s ease}
+.row + .row{border-top:1px solid var(--adw-shade)}
+.row:hover{background:var(--adw-hover)}
+.row-main{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px}
+.row-title{font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.row-sub{font-size:12.5px; color:var(--adw-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.row-actions{display:flex; align-items:center; gap:6px; flex:none}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:color-mix(in srgb,var(--adw-fg) 25%, transparent)}
+.dot.running{background:#2ec27e; box-shadow:0 0 8px rgba(46,194,126,.7)}
+.dot.starting{background:#f5c211; box-shadow:0 0 8px rgba(245,194,17,.6); animation:pulse 1.1s ease-in-out infinite}
+.dot.error{background:#e01b24; box-shadow:0 0 8px rgba(224,27,36,.6)}
+html[data-theme="dark"] .dot.error{background:#ff7b63; box-shadow:0 0 8px rgba(255,123,99,.6)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+.state-chip{padding:2px 9px; border-radius:999px; font-size:11.5px; font-weight:600; flex:none; background:color-mix(in srgb,var(--adw-fg) 9%, transparent); color:var(--adw-fg)}
+.state-chip.running{color:#2ec27e; background:rgba(46,194,126,.15)}
+.state-chip.starting{color:var(--adw-warning); background:rgba(245,194,17,.2)}
+.state-chip.error{color:#e01b24; background:rgba(224,27,36,.15)}
+html[data-theme="dark"] .state-chip.error{color:#ff7b63; background:rgba(255,123,99,.16)}
+.circ-btn{width:34px;height:34px;border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex:none; background:var(--adw-accent); color:#fff; transition:background-color .15s ease, transform .12s ease}
+.circ-btn:hover{background:var(--adw-accent-hover)}
+.circ-btn:active{transform:scale(.92)}
+.circ-btn.stop{background:var(--adw-destructive)}
+.circ-btn.stop:hover{filter:brightness(1.1)}
+.circ-btn .ic{width:16px;height:16px}
+.statuspage{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:56px 24px 60px; text-align:center}
+.statuspage .big-ic{width:88px;height:88px;color:color-mix(in srgb,var(--adw-fg) 42%, transparent); stroke-width:1.2; margin-bottom:8px}
+.statuspage h3{font-size:21px; font-weight:800}
+.statuspage p{font-size:14px; color:var(--adw-dim); max-width:400px}
+.statuspage .gtk-btn{margin-top:14px}
+.prefs{padding:16px 12px 28px; display:flex; flex-direction:column; gap:22px; max-width:880px; margin:0 auto}
+.pref-group{display:flex; flex-direction:column; gap:8px}
+.pref-head{display:flex; align-items:center; gap:8px; padding:0 12px; min-height:32px}
+.pref-head .ptxt{flex:1; min-width:0}
+.pref-title{font-size:14.5px; font-weight:700}
+.pref-desc{font-size:12.5px; color:var(--adw-dim)}
+.pref-box{background:var(--adw-card); border-radius:12px; overflow:hidden; box-shadow:0 0 0 1px rgba(0,0,0,.05)}
+html[data-theme="dark"] .pref-box{box-shadow:none}
+.pref-row{display:flex; align-items:center; gap:12px; padding:8px 12px; min-height:52px; transition:background-color .15s ease}
+.pref-row[hidden]{display:none}
+.pref-row + .pref-row{border-top:1px solid var(--adw-shade)}
+.pref-row:hover{background:var(--adw-hover)}
+.pref-row .lead-ic{width:16px;height:16px;color:var(--adw-dim);flex:none}
+.pref-row.warn{color:var(--adw-warning)}
+.pref-row.warn .lead-ic{color:var(--adw-warning)}
+.pref-row.err{color:#e01b24}
+.pref-row.err .lead-ic{color:#e01b24}
+.radio{width:18px;height:18px;border-radius:50%;flex:none;border:1.6px solid var(--adw-dim); display:grid; place-items:center; transition:border-color .15s ease, background-color .15s ease}
+.radio::after{content:""; width:8px;height:8px;border-radius:50%; background:transparent; transition:background-color .15s ease}
+.pref-row[aria-checked="true"] .radio{border-color:var(--adw-accent); border-width:5px; background:var(--adw-accent)}
+.pref-row[aria-checked="true"] .radio::after{background:#fff; width:6px;height:6px}
+.pref-row[aria-disabled="true"]{opacity:.55; pointer-events:none}
+.entry{flex:1; min-width:0; background:transparent; border:0; outline:none; padding:7px 0; color:var(--adw-fg); font-size:14px; font-variant-numeric:tabular-nums}
+.entry::placeholder{color:var(--adw-dim)}
+.pref-row.entryrow .label{color:var(--adw-dim); flex:none}
+.pref-row.entryrow:focus-within{box-shadow:inset 0 0 0 2px var(--adw-accent); border-radius:10px}
+.switch{width:46px;height:26px;border-radius:999px;flex:none;background:var(--adw-shade); position:relative; transition:background-color .2s ease; cursor:pointer}
+.switch::after{content:""; position:absolute; top:3px; left:3px; width:20px;height:20px;border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:transform .2s cubic-bezier(.2,0,0,1)}
+.switch[aria-checked="true"]{background:var(--adw-accent)}
+.switch[aria-checked="true"]::after{transform:translateX(20px)}
+html[data-theme="dark"] .switch{background:rgba(255,255,255,.16)}
+.spin{display:flex; align-items:center; gap:2px; flex:none}
+.spin input{width:74px; text-align:right; background:transparent; border:0; outline:none; font-size:14px; font-variant-numeric:tabular-nums; color:var(--adw-fg); padding:6px 4px; appearance:textfield; -moz-appearance:textfield}
+.spin input::-webkit-outer-spin-button,.spin input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.spin-btns{display:flex; flex-direction:column; opacity:0; transition:opacity .15s ease}
+.pref-row:hover .spin-btns,.pref-row:focus-within .spin-btns{opacity:1}
+.spin-btns button{width:22px;height:15px;display:grid;place-items:center;border-radius:5px;color:var(--adw-fg)}
+.spin-btns button:hover{background:var(--adw-hover)}
+.spin-btns .ic{width:12px;height:12px;stroke-width:2.4}
+.progress{position:relative; width:210px; height:20px; border-radius:10px; background:var(--adw-raised); overflow:hidden; flex:none}
+.progress .bar{position:absolute; inset:0 auto 0 0; width:0; background:var(--adw-accent); border-radius:10px; transition:width .4s ease}
+.progress span{position:absolute; inset:0; display:grid; place-items:center; font-size:11.5px; font-weight:600; color:var(--adw-fg)}
+.progress.pulse .bar{width:100%; animation:pulsebar 1.3s ease-in-out infinite}
+@keyframes pulsebar{0%,100%{opacity:.35}50%{opacity:.8}}
+.installed-badge{display:inline-flex; align-items:center; gap:5px; color:#2ec27e; font-size:13px; font-weight:600; padding:4px 10px; border-radius:9px; background:rgba(46,194,126,.14)}
+.installed-badge .ic{width:15px;height:15px;stroke-width:2.4}
+.spinner{width:18px;height:18px;border-radius:50%;flex:none; border:2px solid color-mix(in srgb,var(--adw-fg) 22%, transparent); border-top-color:var(--adw-fg); animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.row-icon-btn{width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center; flex:none; color:var(--adw-fg); transition:background-color .15s ease}
+.row-icon-btn:hover{background:var(--adw-hover)}
+.row-icon-btn:active{background:var(--adw-press)}
+.row-icon-btn .ic{width:16px;height:16px}
+.mock-popover{position:absolute; z-index:200; min-width:186px; padding:6px; background:var(--adw-popover); border-radius:12px; box-shadow:0 10px 28px rgba(0,0,0,.22), 0 0 0 1px rgba(0,0,0,.06); animation:pop .13s cubic-bezier(.2,0,0,1); transform-origin:top right}
+html[data-theme="dark"] .mock-popover{box-shadow:0 12px 30px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.08)}
+@keyframes pop{from{opacity:0;transform:scale(.94) translateY(-4px)}to{opacity:1;transform:none}}
+.mock-popover button{display:flex; align-items:center; gap:10px; width:100%; height:34px; padding:0 10px; border-radius:9px; font-size:14px; text-align:left; color:var(--adw-fg)}
+.mock-popover button:hover{background:var(--adw-hover)}
+.mock-popover button .ic{width:16px;height:16px}
+.mock-popover button .tick{width:16px;height:16px;margin-left:auto;opacity:0}
+.mock-popover button[aria-checked="true"] .tick{opacity:1;color:var(--adw-accent)}
+.mock-popover .sep{height:1px; background:var(--adw-shade); margin:6px 4px}
+.mock-scrim{position:absolute; inset:0; z-index:150; background:var(--md-sys-color-scrim); display:none; align-items:center; justify-content:center; border-radius:12px; animation:fade .16s ease}
+.mock-scrim.show{display:flex}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.dialog{position:relative; background:var(--adw-bg); border-radius:12px; box-shadow:0 22px 60px rgba(0,0,0,.4); animation:rise .2s cubic-bezier(.2,0,0,1); display:flex; flex-direction:column; max-height:calc(100% - 40px); overflow:hidden}
+@keyframes rise{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.msgdialog{width:430px; padding:26px 26px 20px}
+.msgdialog h4{font-size:17px; font-weight:800; text-align:center; margin-bottom:12px}
+.msgdialog .body{font-size:14px; color:var(--adw-fg); text-align:center; white-space:pre-line; line-height:1.6}
+.msgdialog .body code{font-family:var(--md-ref-typeface-mono); font-size:13px; background:var(--adw-raised); padding:3px 7px; border-radius:7px; display:inline-block; margin-top:6px; word-break:break-all}
+.msgdialog .actions{display:flex; justify-content:flex-end; gap:8px; margin-top:22px}
+.window-dialog{width:540px; height:560px}
+.dlg-titlebar{height:47px; flex:none; display:flex; align-items:center; gap:6px; padding:0 6px; background:var(--adw-header); position:relative}
+.dlg-titlebar::after{content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--adw-shade)}
+.dlg-titlebar .t{flex:1; text-align:center; font-weight:700; font-size:14.5px}
+.dlg-body{flex:1; min-height:0; overflow-y:auto; background:var(--adw-bg); border-radius:0 0 12px 12px}
+.log-window{position:absolute; z-index:120; width:760px; height:480px; left:150px; top:96px; background:var(--adw-bg); border-radius:12px; box-shadow:0 26px 70px rgba(0,0,0,.42); display:none; flex-direction:column; overflow:hidden; animation:rise .22s cubic-bezier(.2,0,0,1)}
+.log-window.show{display:flex}
+.log-window .title{display:flex; flex-direction:column; align-items:center; line-height:1.25}
+.log-window .title b{font-size:14.5px}
+.log-window .title span{font-size:12px; color:var(--adw-dim)}
+.log-view{flex:1; min-height:0; overflow-y:auto; padding:10px; font-family:var(--md-ref-typeface-mono); font-size:12.5px; line-height:1.62; white-space:pre-wrap; word-break:break-word; color:var(--adw-fg)}
+.log-view .l{display:block}
+.log-view .l.dim{color:var(--adw-dim)}
+.log-view .l.err{color:#e01b24}
+html[data-theme="dark"] .log-view .l.err{color:#ff7b63}
+.log-empty{color:var(--adw-dim); font-family:var(--md-ref-typeface-plain); font-size:13.5px; padding:14px}
+.toast-host{position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:300; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; width:100%}
+.toast{display:flex; align-items:center; gap:12px; min-height:46px; max-width:min(680px,90%); padding:8px 12px 8px 16px; border-radius:12px; background:rgba(0,0,0,.84); color:#fff; font-size:14px; box-shadow:0 6px 20px rgba(0,0,0,.32); animation:toastin .22s cubic-bezier(.2,0,0,1); pointer-events:auto}
+html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,0,0,.6)}
+.toast.leaving{animation:toastout .2s ease forwards}
+.toast .msg{flex:1}
+.toast button{color:#78aeed; font-weight:600; font-size:13.5px; padding:6px 10px; border-radius:8px; flex:none}
+.toast button:hover{background:rgba(255,255,255,.12)}
+@keyframes toastin{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes toastout{to{opacity:0;transform:translateY(12px) scale(.97)}}
+.about-dialog{width:460px; padding:0}
+.about-hero{display:flex; flex-direction:column; align-items:center; gap:10px; padding:32px 26px 18px}
+.about-hero img{width:104px;height:104px;border-radius:26px}
+.about-hero h4{font-size:20px; font-weight:800}
+.about-hero .ver{font-size:12.5px; color:var(--adw-dim)}
+.about-comments{font-size:13.5px; color:var(--adw-fg); text-align:center; padding:0 28px 18px; line-height:1.65}
+.about-links{display:flex; flex-direction:column; gap:2px; padding:0 12px 18px}
+.about-links .link-row{display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px; font-size:13.5px; color:var(--adw-fg)}
+.about-links .link-row:hover{background:var(--adw-hover); text-decoration:none}
+.about-links .link-row .ic{width:16px;height:16px;color:var(--adw-dim)}
+.about-links .link-row .v{margin-left:auto; color:var(--adw-dim); font-size:12.5px}
+.about-foot{display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid var(--adw-shade); font-size:12.5px; color:var(--adw-dim)}
+
+
+/* --------------------------------------------------------------------------
+   13. Feature cards（filled card on surface；图标容器 hover 形变）
+   -------------------------------------------------------------------------- */
+.grid-3{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(310px,1fr))}
+.grid-2{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+
+.feat{
+  background:var(--md-sys-color-surface-container-low);
+  border-radius:var(--md-sys-shape-corner-extra-large);
+  padding:28px; display:flex; flex-direction:column; gap:16px;
+  transition:transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             box-shadow var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.feat:hover{transform:translateY(-3px); box-shadow:var(--md-sys-elevation-level2)}
+.feat .ic-box{
+  width:52px; height:52px; border-radius:var(--md-sys-shape-corner-large); display:grid; place-items:center;
+  background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container);
+  transition:border-radius var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.feat .ic-box .ic{width:26px;height:26px}
+/* 形变目标取盒宽的一半（52/2=26px）才是完整圆且全程可见；
+   若用 corner-full(9999px)，插值第 1 帧就到达视觉满圆，动画会变成瞬间跳变 */
+.feat:hover .ic-box{border-radius:26px}
+.feat:nth-child(3n+2) .ic-box{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
+.feat:nth-child(3n) .ic-box{background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container)}
+.feat h3{font-family:var(--md-ref-typeface-brand); font-size:21px; line-height:28px; font-weight:400; letter-spacing:0}
+.feat p{font-size:14px; line-height:22px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
+.feat p .mono{font-family:var(--md-ref-typeface-mono); font-size:.9em; font-weight:500}
+.feat .tags{display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; padding-top:6px}
+.tag{
+  font-size:12px; font-weight:500; letter-spacing:.4px; line-height:16px;
+  padding:5px 12px; border-radius:var(--md-sys-shape-corner-full);
+  background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface-variant);
+}
+
+/* --------------------------------------------------------------------------
+   14. Steps（快速开始）
+   -------------------------------------------------------------------------- */
+.steps{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.step{
+  position:relative; background:var(--md-sys-color-surface-container-lowest);
+  border:1px solid var(--md-sys-color-outline-variant);
+  border-radius:var(--md-sys-shape-corner-extra-large);
+  padding:28px; display:flex; flex-direction:column; gap:16px;
+  transition:transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             box-shadow var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             border-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.step:hover{transform:translateY(-3px); box-shadow:var(--md-sys-elevation-level2); border-color:var(--md-sys-color-outline)}
+.step-num{
+  width:40px; height:40px; border-radius:var(--md-sys-shape-corner-full); display:grid; place-items:center;
+  background:var(--md-sys-color-primary); color:var(--md-sys-color-on-primary);
+  font-family:var(--md-ref-typeface-brand); font-size:18px; font-weight:500; flex:none;
+}
+.step h3{font-family:var(--md-ref-typeface-brand); font-size:20px; line-height:28px; font-weight:400}
+.step p{font-size:14px; line-height:22px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
+.step .cmd{
+  margin-top:auto; background:var(--md-sys-color-inverse-surface); color:var(--md-sys-color-inverse-on-surface);
+  border-radius:var(--md-sys-shape-corner-medium); padding:12px 16px;
+  font-family:var(--md-ref-typeface-mono); font-size:13px; line-height:1.6;
+  overflow-x:auto; white-space:nowrap;
+}
+.step .cmd b{color:var(--md-sys-color-inverse-primary); font-weight:600}
+.step .kbd{
+  display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 8px;
+  border-radius:6px; background:var(--md-sys-color-surface-container-high);
+  border:1px solid var(--md-sys-color-outline-variant);
+  box-shadow:0 1px 0 var(--md-sys-color-outline-variant);
+  font-family:var(--md-ref-typeface-mono); font-size:11px; font-weight:600; color:var(--md-sys-color-on-surface);
+}
+
+/* --------------------------------------------------------------------------
+   15. FAQ（expanded 卡片）
+   -------------------------------------------------------------------------- */
+.faq-list{display:flex; flex-direction:column; gap:12px; max-width:880px; margin-inline:auto; width:100%}
+.faq{
+  background:var(--md-sys-color-surface-container-low);
+  border-radius:var(--md-sys-shape-corner-large-increased);
+  overflow:hidden; border:1px solid transparent;
+  transition:background-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             box-shadow var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.faq[open]{background:var(--md-sys-color-surface-container-high); box-shadow:var(--md-sys-elevation-level1)}
+.faq summary{
+  list-style:none; display:flex; align-items:center; gap:16px; padding:18px 22px; cursor:pointer; user-select:none;
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq-ic{
+  width:40px; height:40px; border-radius:var(--md-sys-shape-corner-full); flex:none;
+  display:grid; place-items:center;
+  background:var(--md-sys-color-surface-container-highest); color:var(--md-sys-color-on-surface-variant);
+}
+.faq-ic .ic{width:20px;height:20px}
+.faq-q{flex:1; font-size:16px; font-weight:500; line-height:24px; letter-spacing:.15px; color:var(--md-sys-color-on-surface)}
+.faq-chev{
+  width:32px; height:32px; border-radius:50%; flex:none; display:grid; place-items:center;
+  background:var(--md-sys-color-surface-container-highest); color:var(--md-sys-color-on-surface-variant);
+  transition:transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized),
+             background-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.faq-chev .ic{width:18px;height:18px}
+.faq[open] .faq-chev{transform:rotate(180deg); background:var(--md-sys-color-primary); color:var(--md-sys-color-on-primary)}
+.faq .ans{padding:0 24px 24px 78px; font-size:14px; line-height:22px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
+.faq .ans p + p{margin-top:12px}
+.faq .ans code{font-family:var(--md-ref-typeface-mono); font-size:13px; background:var(--md-sys-color-surface-container-highest); color:var(--md-sys-color-on-surface); padding:2px 8px; border-radius:6px}
+.faq .ans ul{display:flex; flex-direction:column; gap:10px; margin-top:12px}
+.faq .ans li{position:relative; padding-left:22px}
+.faq .ans li::before{content:""; position:absolute; left:4px; top:.55em; width:6px; height:6px; border-radius:50%; background:var(--md-sys-color-primary)}
+
+/* --------------------------------------------------------------------------
+   16. Download cards
+   -------------------------------------------------------------------------- */
+.dl-card{
+  position:relative; background:var(--md-sys-color-surface-container-lowest);
+  border:1px solid var(--md-sys-color-outline-variant);
+  border-radius:var(--md-sys-shape-corner-extra-large);
+  padding:28px; display:flex; flex-direction:column; gap:18px;
+  transition:transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             box-shadow var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             border-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+.dl-card:hover{transform:translateY(-3px); box-shadow:var(--md-sys-elevation-level2); border-color:var(--md-sys-color-outline)}
+.dl-card.featured{background:var(--md-sys-color-primary-container); border-color:transparent; color:var(--md-sys-color-on-primary-container)}
+.dl-card.featured:hover{box-shadow:var(--md-sys-elevation-level3)}
+.dl-card .head{display:flex; align-items:center; gap:16px}
+.dl-card .head .ic-box{
+  width:52px; height:52px; border-radius:var(--md-sys-shape-corner-large); display:grid; place-items:center;
+  background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface-variant); flex:none;
+}
+.dl-card .head .ic-box .ic{width:26px;height:26px}
+.dl-card.featured .head .ic-box{background:color-mix(in srgb, var(--md-sys-color-on-primary-container) 12%, transparent); color:var(--md-sys-color-on-primary-container)}
+.dl-card h3{font-family:var(--md-ref-typeface-brand); font-size:21px; line-height:28px; font-weight:400}
+.dl-card .sub{font-size:12px; line-height:16px; color:var(--md-sys-color-on-surface-variant); font-weight:500; letter-spacing:.4px; margin-top:3px}
+.dl-card.featured .sub{color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 78%, transparent)}
+.dl-desc{font-size:14px; line-height:22px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
+.dl-card.featured .dl-desc{color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 85%, transparent)}
+.dl-list{display:flex; flex-direction:column; gap:8px; margin-top:auto}
+.dl-item{
+  display:flex; align-items:center; gap:12px; padding:12px 16px; min-height:48px;
+  border-radius:var(--md-sys-shape-corner-medium);
+  background:var(--md-sys-color-surface-container-low);
+  border:1px solid var(--md-sys-color-outline-variant);
+  font-size:14px; font-weight:500; letter-spacing:.1px; color:inherit;
+  transition:background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             border-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+             transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.dl-item:hover{background:var(--md-sys-color-surface-container); border-color:var(--md-sys-color-outline); transform:translateY(-1px)}
+.dl-card.featured .dl-item{background:color-mix(in srgb, var(--md-sys-color-on-primary-container) 8%, transparent); border-color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 16%, transparent)}
+.dl-card.featured .dl-item:hover{background:color-mix(in srgb, var(--md-sys-color-on-primary-container) 14%, transparent)}
+.dl-item .nm{font-family:var(--md-ref-typeface-mono); font-size:13px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dl-item .sz{
+  font-size:11px; font-weight:500; letter-spacing:.4px; color:var(--md-sys-color-on-surface-variant); flex:none;
+  padding:3px 10px; border-radius:var(--md-sys-shape-corner-full); background:var(--md-sys-color-surface-container-high);
+}
+.dl-card.featured .dl-item .sz{color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 80%, transparent); background:color-mix(in srgb, var(--md-sys-color-on-primary-container) 12%, transparent)}
+.dl-item .ic{width:18px;height:18px;flex:none; color:var(--md-sys-color-primary)}
+.dl-card.featured .dl-item .ic{color:var(--md-sys-color-on-primary-container)}
+
+/* --------------------------------------------------------------------------
+   17. CTA band（M3 Expressive 面板 + 几何装饰）
+   -------------------------------------------------------------------------- */
+.cta-band{
+  position:relative; overflow:hidden;
+  border-radius:var(--md-sys-shape-corner-extra-large-increased);
+  background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container);
+  padding:clamp(36px,5vw,60px); display:flex; flex-direction:column; gap:20px; align-items:flex-start;
+}
+.cta-band .deco{position:absolute; pointer-events:none; color:var(--md-sys-color-on-primary-container)}
+.cta-band .deco.quarter{
+  width:220px; height:220px; right:-64px; top:-64px;
+  background:currentColor; opacity:.10; border-radius:0 0 0 100%;
+}
+.cta-band .deco.ring{
+  width:120px; height:120px; right:120px; bottom:-48px;
+  border:14px solid currentColor; opacity:.10; border-radius:50%;
+}
+.cta-band .deco.dot{width:44px; height:44px; right:56px; top:36px; background:currentColor; opacity:.10; border-radius:50%}
+.cta-band h2{font-family:var(--md-ref-typeface-brand); font-size:clamp(24px,3.4vw,34px); font-weight:400; letter-spacing:0; line-height:1.25; position:relative; z-index:1; text-wrap:balance}
+.cta-band p{font-size:16px; line-height:26px; max-width:62ch; color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 86%, transparent); letter-spacing:.15px; position:relative; z-index:1}
+.cta-band .actions{display:flex; flex-wrap:wrap; gap:12px; position:relative; z-index:1}
+.cta-band .m3-btn.filled{background:var(--md-sys-color-on-primary-container); color:var(--md-sys-color-primary-container)}
+.cta-band .m3-btn.outlined{border-color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 55%, transparent); color:var(--md-sys-color-on-primary-container)}
+
+/* --------------------------------------------------------------------------
+   18. Footer
+   -------------------------------------------------------------------------- */
+footer.site{background:var(--md-sys-color-surface-container); padding-block:clamp(48px,6vw,72px) 32px}
+.foot-grid{display:grid; gap:40px 32px; grid-template-columns:minmax(0,1.45fr) repeat(auto-fit,minmax(170px,1fr))}
+.foot-brand{display:flex; flex-direction:column; gap:16px; max-width:380px}
+.foot-brand .b{display:flex; align-items:center; gap:12px}
+.foot-brand .b svg{width:40px;height:40px;border-radius:var(--md-sys-shape-corner-medium)}
+.foot-brand .b span{font-family:var(--md-ref-typeface-brand); font-size:20px; line-height:28px; color:var(--md-sys-color-on-surface)}
+.foot-brand p{font-size:14px; color:var(--md-sys-color-on-surface-variant); line-height:22px; letter-spacing:.25px}
+.foot-brand p .heart{color:var(--md-sys-color-primary)}
+.foot-tags{display:flex; gap:8px; flex-wrap:wrap}
+.foot-col h4{font-size:14px; font-weight:500; line-height:20px; letter-spacing:.1px; margin-bottom:10px; color:var(--md-sys-color-on-surface)}
+.foot-col a{
+  display:block; font-size:14px; line-height:20px; color:var(--md-sys-color-on-surface-variant);
+  padding:7px 0; transition:color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.foot-col a:hover{color:var(--md-sys-color-primary)}
+.foot-bottom{
+  margin-top:44px; padding-top:24px; border-top:1px solid var(--md-sys-color-outline-variant);
+  display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between;
+  font-size:12px; line-height:18px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.4px;
+}
+
+/* --------------------------------------------------------------------------
+   19. Snackbar / FAB
+   -------------------------------------------------------------------------- */
+.snack-host{
+  position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:200;
+  display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none;
+  width:calc(100% - 32px); max-width:600px;
+}
+.snack{
+  display:flex; align-items:center; gap:8px; min-height:48px; padding:0 16px; width:100%;
+  border-radius:var(--md-sys-shape-corner-extra-small);
+  background:var(--md-sys-color-inverse-surface); color:var(--md-sys-color-inverse-on-surface);
+  font-size:14px; line-height:20px; letter-spacing:.1px;
+  box-shadow:var(--md-sys-elevation-level3);
+  animation:snackin var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized);
+  pointer-events:auto;
+}
+.snack.leaving{animation:snackout var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard) forwards}
+.snack button{
+  color:var(--md-sys-color-inverse-primary); font-weight:500; font-size:14px; letter-spacing:.1px;
+  padding:0 10px; height:36px; border-radius:var(--md-sys-shape-corner-full); flex:none; margin-left:auto;
+  transition:background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.snack button:hover{background:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 10%, transparent)}
+@keyframes snackin{from{opacity:0; transform:translateY(18px) scale(.97)}to{opacity:1; transform:none}}
+@keyframes snackout{to{opacity:0; transform:translateY(12px) scale(.97)}}
+
+.fab{
+  position:fixed; right:clamp(16px,3vw,32px); bottom:clamp(16px,3vw,32px); z-index:120;
+  width:56px; height:56px; border-radius:var(--md-sys-shape-corner-large);
+  background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container);
+  display:grid; place-items:center; box-shadow:var(--md-sys-elevation-level3);
+  opacity:0; transform:translateY(14px) scale(.9); pointer-events:none;
+  transition:opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+             transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized),
+             box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.fab.show{opacity:1; transform:none; pointer-events:auto}
+.fab:hover{box-shadow:var(--md-sys-elevation-level4)}
+.fab:active{transform:scale(.94)}
+.fab .ic{transform:rotate(180deg)}
+
+/* --------------------------------------------------------------------------
+   20. Reveal & motion
+   -------------------------------------------------------------------------- */
+.reveal{opacity:0; transform:translateY(24px); transition:opacity 480ms var(--md-sys-motion-easing-standard), transform 520ms var(--md-sys-motion-easing-emphasized)}
+.reveal.in{opacity:1; transform:none}
+.reveal.d1{transition-delay:70ms}
+.reveal.d2{transition-delay:140ms}
+.reveal.d3{transition-delay:210ms}
+.reveal.d4{transition-delay:280ms}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
+  .reveal{opacity:1; transform:none}
+  html{scroll-behavior:auto}
+}
+
+/* --------------------------------------------------------------------------
+   21. Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width:1100px){
+  .hero-grid{grid-template-columns:1fr; gap:44px}
+  .hero-visual{order:-1}
+  .nav{display:none}
+  .nav.open{display:none}
+  .appicon-wrap{width:min(280px,58vw)}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(odd){border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 62%, transparent)}
+}
+@media (max-width:860px){
+  .nav{display:none}
+  .nav.open{display:none}
+  .nav.open a{height:48px}
+  .nav.open a.active{background:var(--md-sys-color-secondary-container)}
+  .nav-toggle{display:none}
+  .ans{padding-left:24px !important}
+}
+@media (max-width:640px){
+  :root{--pad:16px}
+  .gh-btn span{display:none}
+  .gh-btn{padding:0; width:40px; justify-content:center}
+  .demo-toolbar{padding:14px; border-radius:var(--md-sys-shape-corner-large-increased)}
+  .dt-hint{margin-right:0}
+  .dt-sep{display:none}
+  .feat,.dl-card,.step{padding:22px}
+  .hero-cta .m3-btn{flex:1 1 auto}
+  .faq summary{padding:16px 18px}
+  .faq .ans{padding:0 18px 20px}
+  .stat{padding:18px 18px 16px}
+}
+</style>
+</head>
+<body id="top">
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="appiconGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9a3c"/><stop offset="1" stop-color="#f26522"/>
+    </linearGradient>
+    <g id="i-app">
+      <rect x="8" y="8" width="112" height="112" rx="38.158" fill="url(#appiconGrad)"/>
+      <path d="M 43.685 71.387 C 35.462 69.996 31.829 60.226 37.144 53.8 C 39.144 51.382 42.095 49.951 45.232 49.876 C 47.664 36.998 63.123 31.582 73.059 40.126 C 75.111 41.89 76.713 44.118 77.732 46.626 C 87.262 44.839 95.154 54.039 91.936 63.186 C 90.442 67.432 86.798 70.558 82.375 71.387 L 43.685 71.387 Z" fill="#fff" opacity=".95"/>
+      <path d="M 33.381 85.205 L 93.974 85.205" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".85"/>
+      <circle cx="43.48" cy="85.205" r="4.208" fill="#2ec27e"/>
+      <circle cx="63.677" cy="85.205" r="4.208" fill="#2ec27e"/>
+      <circle cx="83.875" cy="85.205" r="4.208" fill="#2ec27e"/>
+    </g>
+  </defs>
+  <symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.6 5.5v13L19.2 12z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7.2" y="7.2" width="9.6" height="9.6" rx="1.8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3.4" y="5.4" width="17.2" height="13.2" rx="2.6"/><path d="M7.6 10.4l2.5 2.4-2.5 2.4M12.8 15.2h3.8"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5.6" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="18.4" r="1.7" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20.2 4.4v4.8h-4.8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10.6m0 0-4-4m4 4 4-4M5 19.6h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7.6h14M10 7.6V5.4h4v2.2M6.6 7.6 7.6 19.2h8.8l1-11.6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5.4 12.6l4.3 4.3L18.6 7.6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.6" y="8.6" width="11" height="11" rx="2.6"/><path d="M15.4 5.4H6.6a2 2 0 0 0-2 2v8.8"/></symbol>
+  <symbol id="i-clear" viewBox="0 0 24 24"><path d="M4 7h16M4 11.5h11M4 16h7M16.6 14.2l4.6 4.6M21.2 14.2l-4.6 4.6"/></symbol>
+  <symbol id="i-follow" viewBox="0 0 24 24"><path d="M12 4.4v10.4m0 0-4-4m4 4 4-4M5 19.6h14"/></symbol>
+  <symbol id="i-warning" viewBox="0 0 24 24"><path d="M12 4.2 21 19.8H3z"/><path d="M12 10v4.3"/><circle cx="12" cy="16.9" r=".95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.8v4.9"/><circle cx="12" cy="16.2" r=".95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="5.6" r="2.6"/><circle cx="5.8" cy="18" r="2.6"/><circle cx="18.2" cy="18" r="2.6"/><path d="M10.7 7.9 7 15.6M13.3 7.9 17 15.6M8.4 18h7.2"/></symbol>
+  <symbol id="i-update" viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 0-8.4 8.4"/><path d="M12 16.4V8.2m-3 3 3-3 3 3"/></symbol>
+  <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.6 14.4A8.9 8.9 0 0 1 9.6 3.4a8.9 8.9 0 1 0 11 11z"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.4a8.6 8.6 0 0 0 0 17.2c1.3 0 2-.9 2-1.8 0-1.7-1.5-1.8-1.5-3.1 0-1 .9-1.8 2-1.8h1.4a5.2 5.2 0 0 0 5.2-5.2c0-3-4-5.3-9.1-5.3z"/><circle cx="8.6" cy="9.2" r="1.05" fill="currentColor" stroke="none"/><circle cx="12" cy="7.4" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.4" cy="9.4" r="1.05" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M11 3.6l1.7 4.6 4.6 1.7-4.6 1.7L11 16.2 9.3 11.6 4.7 9.9l4.6-1.7z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.8l8.2 4.1-8.2 4.1-8.2-4.1z"/><path d="M4.4 12.4 12 16.2l7.6-3.8M4.4 16.4 12 20.2l7.6-3.8"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3.2" y="4.6" width="17.6" height="12.2" rx="2.6"/><path d="M9 20h6M12 16.8V20"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.8v5.3c0 4.3-2.9 7.5-7 9-4.1-1.5-7-4.7-7-9V6.3z"/><path d="M9.1 12.1l2.2 2.2 4-4.2"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M9.5 8 5 12l4.5 4M14.5 8 19 12l-4.5 4"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.3s-7.6-4.7-7.6-10A4.6 4.6 0 0 1 12 7.4a4.6 4.6 0 0 1 7.6 2.9c0 5.3-7.6 10-7.6 10z"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h13M13.5 6.5 19 12l-5.5 5.5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14.5 5.5H19V10M19 5.5 12.6 11.9M18 14v3.5a1.5 1.5 0 0 1-1.5 1.5H6.5A1.5 1.5 0 0 1 5 17.5V7.5A1.5 1.5 0 0 1 6.5 6H10"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="6.2" y="4.6" width="11.6" height="15" rx="2.4"/><rect x="9.6" y="2.9" width="4.8" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><path d="M9.5 11h5M9.5 14.6h5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15l5.5-5.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v5.2"/><circle cx="12" cy="8.1" r=".95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3.4l8 4v9.2l-8 4-8-4V7.4z"/><path d="M4.3 7.5 12 11.5l7.7-4M12 11.5v9"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.8" y="10.4" width="14.4" height="9.4" rx="2.6"/><path d="M8.4 10.4V8a3.6 3.6 0 0 1 7.2 0v2.4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.6 7.6a2 2 0 0 1 2-2h3.1l2 2.2h7.7a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H5.6a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-enter" viewBox="0 0 24 24"><path d="M20 6v6.4a2.6 2.6 0 0 1-2.6 2.6H5.4m0 0 3.6-3.6M5.4 15l3.6 3.6"/></symbol>
+</svg>
+
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#top" aria-label="Cloudflared 隧道管理器 · 返回顶部">
+      <span class="brand-icon"><svg viewBox="0 0 128 128" aria-hidden="true"><use href="#i-app"></use></svg></span>
+      <span class="brand-name">Cloudflared Helper</span>
+      <span class="brand-badge">Desktop</span>
+    </a>
+    <nav class="nav" id="nav" aria-label="页面导航">
+      <a href="#preview">界面预览</a>
+      <a href="#features">功能</a>
+      <a href="#workflow">快速开始</a>
+      <a href="#faq">常见问题</a>
+      <a href="#install">下载</a>
+    </nav>
+    <div class="topbar-actions">
+      <button class="m3-icon-btn tonal" id="themeBtn" type="button" aria-label="切换深浅色主题" title="切换深浅色主题">
+        <svg class="ic s20" aria-hidden="true"><use href="#i-moon"></use></svg>
+      </button>
+      <a class="gh-btn" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop" target="_blank" rel="noopener">
+        <svg class="ic" aria-hidden="true"><use href="#i-github"></use></svg><span>GitHub</span>
+      </a>
+      <button class="m3-icon-btn nav-toggle" id="navToggle" type="button" aria-label="展开导航" aria-expanded="false">
+        <svg class="ic s20" aria-hidden="true"><use href="#i-menu"></use></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ============================== Hero ============================== -->
+<section class="hero" aria-labelledby="t-hero">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="shell hero-grid">
+    <div class="hero-copy reveal">
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"></use></svg>AGPL-3.0 · Made with ❤️ by lingyicute</span>
+      <h1 class="hero-title" id="t-hero">多条 Cloudflare Tunnel，<br><strong>一个现代化桌面窗口搞定。</strong></h1>
+      <p class="hero-sub">
+        基于 Python + GTK4 的现代化桌面应用：保存任意数量的 cloudflared access 隧道，多条同时运行，每条都有独立的状态灯、启停按钮与实时日志。<br>
+        复制一条 <mark>trycloudflare.com</mark> 快速隧道链接再切回窗口，还可以快速连接。
+      </p>
+      <div class="hero-cta">
+        <a class="m3-btn filled large" href="#install"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>下载最新版本</a>
+        <a class="m3-btn outlined large" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop" target="_blank" rel="noopener">
+          <svg class="ic" aria-hidden="true"><use href="#i-github"></use></svg>在 GitHub 上查看</a>
+      </div>
+      <div class="hero-chips">
+        <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-monitor"></use></svg>Linux / macOS</span>
+        <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg>Flatpak</span>
+        <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg>GTK4</span>
+        <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-lock"></use></svg>AGPL-3.0</span>
+      </div>
+    </div>
+    <div class="hero-visual reveal d2">
+      <div class="appicon-wrap">
+        <span class="orbit o1" aria-hidden="true"></span>
+        <span class="orbit o2" aria-hidden="true"></span>
+        <svg class="appicon" viewBox="0 0 128 128" role="img" aria-label="应用图标"><use href="#i-app"></use></svg>
+        <span class="orbit-chip oc1"><svg class="ic" aria-hidden="true"><use href="#i-network"></use></svg>多隧道管理</span>
+        <span class="orbit-chip oc2"><svg class="ic" aria-hidden="true"><use href="#i-update"></use></svg>cloudflared 下载与更新</span>
+        <span class="orbit-chip oc3"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg>剪贴板自动识别</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 预览 ============================== -->
+<section class="band band--tint" id="preview" aria-labelledby="t-preview">
+  <div class="shell">
+    <div class="sec-head center reveal">
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-monitor"></use></svg>在线预览 · 直接上手点</span>
+      <p class="sec-sub">
+        下面这个窗口是用原生 HTML / CSS / JS 复刻的：同样的标题栏、
+        同样的 boxed-list、同样的状态灯与文案。点「+」新建、点圆钮连接、点终端图标读日志、切到「版本管理」下载 cloudflared —— 行为都跟着真实代码走。
+      </p>
+    </div>
+
+    <div class="demo-toolbar reveal">
+      <div class="dt-hint">
+        <svg class="ic" aria-hidden="true"><use href="#i-info"></use></svg>
+        <span>窗口里的按钮都能点：试试 <b>+</b> 号新建隧道、行尾 <b>⋮</b> 菜单、右上角主菜单与「版本管理」页。</span>
+      </div>
+      <div class="dt-actions">
+        <button class="m3-btn tonal" id="demoQuick" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg>剪贴板快速新建演示</button>
+        <button class="m3-icon-btn outlined" id="demoReset" type="button" title="重置演示" aria-label="重置演示"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
+      </div>
+    </div>
+
+    <div class="stage reveal d1" id="stage">
+      <div class="stage-scroll">
+      <div class="stage-inner" id="stageInner">
+        <div class="mock" id="mock">
+          <div class="mock-titlebar" id="mockTitlebar">
+            <button class="tb-btn" id="mockAdd" type="button" title="新建隧道 (Ctrl+N)" aria-label="新建隧道">
+              <svg class="ic" aria-hidden="true"><use href="#i-add"></use></svg></button>
+            <div class="tb-spacer"></div>
+            <div class="viewswitcher" role="tablist" aria-label="页面切换">
+              <button id="tabTunnels" role="tab" aria-selected="true" type="button">
+                <svg class="ic" aria-hidden="true"><use href="#i-network"></use></svg>隧道</button>
+              <button id="tabVersions" role="tab" aria-selected="false" type="button">
+                <svg class="ic" aria-hidden="true"><use href="#i-update"></use></svg>版本管理</button>
+            </div>
+            <div class="tb-spacer"></div>
+            <button class="tb-btn" id="mockMenuBtn" type="button" title="主菜单" aria-label="主菜单" aria-haspopup="true">
+              <svg class="ic" aria-hidden="true"><use href="#i-menu"></use></svg></button>
+            <button class="tb-btn round" id="mockClose" type="button" title="关闭窗口" aria-label="关闭窗口">
+              <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg></button>
+          </div>
+          <div class="mock-body">
+            <div class="page active" id="pageTunnels">
+              <div class="scroller" id="tunnelScroller">
+                <div class="clamp">
+                  <div class="toolbar-head">
+                    <div class="labels">
+                      <span class="h1" id="mockSummary">0 / 0 个隧道运行中</span>
+                      <span class="caption" id="mockBinary">cloudflared：检测中…</span>
+                    </div>
+                    <button class="gtk-btn suggested" id="mockStartAll" type="button">全部启动</button>
+                    <button class="gtk-btn" id="mockStopAll" type="button">全部停止</button>
+                  </div>
+                  <div class="boxed-list" id="tunnelList"></div>
+                  <div class="statuspage" id="emptyState" style="display:none">
+                    <svg class="ic big-ic" aria-hidden="true"><use href="#i-network"></use></svg>
+                    <h3>还没有隧道</h3>
+                    <p>添加一个 Cloudflare Tunnel 连接，即可一键将远程 SSH / RDP / 任意 TCP 服务映射到本地端口。</p>
+                    <button class="gtk-btn pill suggested" id="emptyAdd" type="button">新建隧道</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="page" id="pageVersions">
+              <div class="scroller"><div class="prefs" id="prefsRoot"></div></div>
+            </div>
+          </div>
+          <div class="log-window" id="logWin" role="dialog" aria-label="日志窗口" aria-modal="false">
+            <div class="dlg-titlebar">
+              <span style="width:34px" aria-hidden="true"></span>
+              <div class="title"><b id="logTitle">日志</b><span id="logState">已停止</span></div>
+              <div style="flex:1"></div>
+              <button class="tb-btn" id="logFollow" type="button" title="自动滚动到底部" aria-pressed="true">
+                <svg class="ic" aria-hidden="true"><use href="#i-follow"></use></svg></button>
+              <button class="tb-btn" id="logClear" type="button" title="清空日志" aria-label="清空日志">
+                <svg class="ic" aria-hidden="true"><use href="#i-clear"></use></svg></button>
+              <button class="tb-btn" id="logCopy" type="button" title="复制全部" aria-label="复制全部">
+                <svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+              <button class="tb-btn round" id="logClose" type="button" title="关闭" aria-label="关闭日志窗口">
+                <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg></button>
+            </div>
+            <div class="log-view" id="logView"></div>
+          </div>
+          <div class="mock-scrim" id="scrim"></div>
+          <div class="toast-host" id="toastHost"></div>
+        </div>
+      </div>
+      </div>
+    </div>
+    <p class="mock-hint-small"><svg class="ic s16" aria-hidden="true"><use href="#i-arrow-right"></use></svg>窗口较宽，可左右滑动查看完整界面</p>
+
+  </div>
+</section>
+
+<!-- ============================== 功能 ============================== -->
+<section class="band" id="features" aria-labelledby="t-features">
+  <div class="shell">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg>功能特性</span>
+      <h2 class="sec-title" id="t-features">为「同时连好几条隧道」这件事而做</h2>
+      <p class="sec-sub">不是把命令行包一层壳。多隧道状态机、版本管理、剪贴板识别、端口校验，都是从日常使用里长出来的细节。</p>
+    </div>
+    <div class="grid-3">
+      <article class="feat reveal">
+        <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg></span>
+        <h3>多隧道并发</h3>
+        <p>保存任意数量的隧道，可同时连接多条。每条隧道都有独立的状态指示、启停按钮与实时日志，一条挂了不影响其他几条。</p>
+        <div class="tags"><span class="tag">独立进程</span><span class="tag">状态灯</span><span class="tag">实时日志</span></div>
+      </article>
+      <article class="feat reveal d1">
+        <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg></span>
+        <h3>剪贴板快速新建</h3>
+        <p>窗口获得焦点后读一次剪贴板，发现 <span class="mono">*.trycloudflare.com</span> 链接就询问是否连接；点「是」时主机名和名称都填好了。</p>
+        <div class="tags"><span class="tag">焦点检测</span><span class="tag">150 ms 延迟</span><span class="tag">一链只问一次</span></div>
+      </article>
+      <article class="feat reveal d2">
+        <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-update"></use></svg></span>
+        <h3>cloudflared 版本管理</h3>
+        <p>自动识别系统与架构，从官方 Releases 拉取版本列表，一键下载安装、显示进度、随时取消；多版本并存，随时切换策略。</p>
+        <div class="tags"><span class="tag">自动 chmod +x</span><span class="tag">多版本并存</span><span class="tag">探测生效版本</span></div>
+      </article>
+      <article class="feat reveal">
+        <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-shield"></use></svg></span>
+        <h3>智能校验</h3>
+        <p>端口范围检查、低于 1024 的权限提示、本地端口冲突检测，全部在启动之前拦下来——而不是让你对着 cloudflared 的报错猜。</p>
+        <div class="tags"><span class="tag">1–65535</span><span class="tag">sudo 提示</span><span class="tag">冲突检测</span></div>
+      </article>
+      <article class="feat reveal d1">
+        <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"></use></svg></span>
+        <h3>贴心细节</h3>
+        <p>程序启动时自动连接标了「自动连接」的隧道、一键复制等效命令行、连接失败时从提示条直接跳到日志、退出前确认断开。</p>
+        <div class="tags"><span class="tag">自动连接</span><span class="tag">复制命令行</span><span class="tag">退出确认</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 快速开始 ============================== -->
+<section class="band band--tint" id="workflow" aria-labelledby="t-workflow">
+  <div class="shell">
+    <div class="sec-head center reveal">
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-enter"></use></svg>快速开始</span>
+      <h2 class="sec-title" id="t-workflow">三步，连上一条隧道</h2>
+      <p class="sec-sub">全流程甚至不用碰鼠标：从复制链接到隧道跑起来，唯一的动作是敲一个端口号、按一次回车。</p>
+    </div>
+    <div class="steps">
+      <article class="step reveal">
+        <div class="step-num" aria-hidden="true">1</div>
+        <h3>复制快速隧道链接</h3>
+        <p>在任意机器上跑一条快速隧道，把输出的 <code class="mono">https://xxx.trycloudflare.com</code> 整条复制下来。</p>
+      </article>
+      <article class="step reveal d1">
+        <div class="step-num" aria-hidden="true">2</div>
+        <h3>切回窗口，点「是」</h3>
+        <p>应用拿到焦点后读一次剪贴板。只有「整条剪贴板就是一个快速隧道链接」才会弹窗询问，而且同一条链接一个会话只问一次。</p>
+      </article>
+      <article class="step reveal d2">
+        <div class="step-num" aria-hidden="true">3</div>
+        <h3>敲端口，回车保存</h3>
+        <p>新建对话框里主机名与「yyyymmdd hh:mm:ss 快速隧道」都已经填好，光标停在端口框上，输入数字回车即可。</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== FAQ ============================== -->
+<section class="band" id="faq" aria-labelledby="t-faq">
+  <div class="shell">
+    <div class="sec-head center reveal">
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-info"></use></svg>常见问题</span>
+      <h2 class="sec-title" id="t-faq">它为什么这么做</h2>
+      <p class="sec-sub">这些设计决策都写在代码和文档里，这里整理成几条最常被问到的。</p>
+    </div>
+    <div class="faq-list reveal">
+      <details class="faq" open>
+        <summary>
+          <span class="faq-ic"><svg class="ic" aria-hidden="true"><use href="#i-terminal"></use></svg></span>
+          <span class="faq-q">为什么没有「协议类型」选项？</span>
+          <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
+        </summary>
+        <div class="ans">
+          <p>因为 <code>cloudflared access</code> 的 <code>ssh</code> / <code>rdp</code> / <code>smb</code> 并不是不同的协议实现，它们只是 <code>tcp</code> 的别名：四个子命令共用同一个 Action 和同一组 flag，源码中没有任何地方读取子命令名；<code>ssh://</code>、<code>rdp://</code> 这类 scheme 也只用来推导缺省的 <code>--url</code>，对转发行为没有任何影响。</p>
+          <p>因此本应用统一执行：<code>cloudflared access tcp --hostname &lt;隧道主机名&gt; --url &lt;监听地址&gt;:&lt;端口&gt;</code></p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>
+          <span class="faq-ic"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg></span>
+          <span class="faq-q">需要先自己安装 cloudflared 吗？</span>
+          <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
+        </summary>
+        <div class="ans">
+          <p>不需要。在「版本管理」页点「安装最新版」，应用会按系统与架构匹配官方资源名（如 <code>cloudflared-linux-amd64</code>），下载后自动 <code>chmod +x</code> 并记下位置。</p>
+          <p>你也可以用系统 PATH 里已有的 cloudflared，或指定某个已安装的版本；「自动：最新已安装版本」是默认策略。</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>
+          <span class="faq-ic"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg></span>
+          <span class="faq-q">它会一直读取我的剪贴板吗？</span>
+          <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
+        </summary>
+        <div class="ans">
+          <p>不会。它只在「整个窗口获得键盘焦点」时读一次，并延迟 150 ms。窗口内部控件之间切焦点不算「获得焦点」，所以不会反复弹窗。</p>
+          <ul>
+            <li>同一条链接一个会话只问一次；</li>
+            <li>已经建过相同主机名的隧道就不再问；</li>
+            <li>在预填对话框里点了「取消」不会吞掉链接，下次切回窗口还会再问；</li>
+            <li>不想要可以在主菜单里关掉「剪贴板快速新建」。</li>
+          </ul>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>
+          <span class="faq-ic"><svg class="ic" aria-hidden="true"><use href="#i-network"></use></svg></span>
+          <span class="faq-q">多条隧道能同时连吗？端口冲突怎么办？</span>
+          <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
+        </summary>
+        <div class="ans">
+          <p>可以同时连，每条隧道是一个独立的 cloudflared 子进程，有各自的日志与退出码。</p>
+          <p>启动前会做本地端口冲突检测：<code>localhost</code> 与 <code>::1</code> 视为同一地址，<code>0.0.0.0</code> / <code>::</code> 与任何具体地址都算冲突。</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>
+          <span class="faq-ic"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span>
+          <span class="faq-q">支持哪些系统？怎么分发？</span>
+          <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
+        </summary>
+        <div class="ans">
+          <p>Linux 与 macOS，自动识别 <code>amd64</code> / <code>arm64</code> / <code>arm</code> / <code>386</code>。分发方式有两种：Flatpak（GNOME 50 运行时，x86_64 与 aarch64）与 PyInstaller 便携 <code>tar.gz</code>，都从 GitHub Releases 下载。</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 下载 ============================== -->
+<section class="band band--tint" id="install" aria-labelledby="t-install">
+  <div class="shell">
+    <div class="sec-head reveal">
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>下载安装</span>
+      <h2 class="sec-title" id="t-install">挑一种方式装上去</h2>
+      <p class="sec-sub">所有构建产物都在 GitHub Actions 里自动生成并上传到 Releases，文件名与架构一一对应。</p>
+    </div>
+    <div class="grid-3">
+      <article class="dl-card featured reveal">
+        <div class="head">
+          <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span>
+          <div><h3>Flatpak</h3><div class="sub">推荐 · GNOME 50 运行时</div></div>
+        </div>
+        <p class="dl-desc">沙箱内运行，只申请 Wayland、网络与自身配置目录权限；随运行时统一升级。</p>
+        <div class="dl-list">
+          <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
+            <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
+            <span class="nm">cloudflared-tunnel-manager-x86_64.flatpak</span><span class="sz">x86_64</span></a>
+          <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
+            <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
+            <span class="nm">cloudflared-tunnel-manager-aarch64.flatpak</span><span class="sz">aarch64</span></a>
+        </div>
+      </article>
+
+      <article class="dl-card reveal d1">
+        <div class="head">
+          <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg></span>
+          <div><h3>便携版 tar.gz</h3><div class="sub">PyInstaller 打包 · 解压即用</div></div>
+        </div>
+        <p class="dl-desc">自带 GTK4 / libadwaita typelib，不挑发行版，解压后直接运行，适合装在 U 盘或临时环境里。</p>
+        <div class="dl-list">
+          <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
+            <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
+            <span class="nm">…-linux-x86_64.tar.gz</span><span class="sz">x86_64</span></a>
+          <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
+            <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
+            <span class="nm">…-linux-aarch64.tar.gz</span><span class="sz">aarch64</span></a>
+        </div>
+      </article>
+
+      <article class="dl-card reveal d2">
+        <div class="head">
+          <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-code"></use></svg></span>
+          <div><h3>从源码运行</h3><div class="sub">Python ≥ 3.10 · GTK 4 · libadwaita ≥ 1.4</div></div>
+        </div>
+        <p class="dl-desc">适合想改点什么的你。装好 PyGObject 与 GTK4 / libadwaita，然后一条命令起。</p>
+        <div class="code-block">
+          <button class="cp" type="button" data-copy="sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+python3 main.py" aria-label="复制命令"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+          <pre><span class="cmt"># Debian / Ubuntu 24.04+</span>
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+python3 main.py</pre>
+        </div>
+      </article>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="code-block reveal">
+        <button class="cp" type="button" data-copy="flatpak install --user ./cloudflared-tunnel-manager-x86_64.flatpak
+flatpak run uk._92li.cftm.CloudflaredTunnelManager" aria-label="复制命令"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+        <pre><span class="cmt"># 安装并启动 Flatpak 包</span>
+flatpak install --user ./cloudflared-tunnel-manager-x86_64.flatpak
+flatpak run uk._92li.cftm.CloudflaredTunnelManager</pre>
+      </div>
+      <div class="code-block reveal d1">
+        <button class="cp" type="button" data-copy="tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
+./cloudflared-tunnel-manager/cloudflared-tunnel-manager --self-test   # 可选：环境自检" aria-label="复制命令"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+        <pre><span class="cmt"># 解压便携包（--self-test 可先验环境）</span>
+tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
+./cloudflared-tunnel-manager/cloudflared-tunnel-manager</pre>
+      </div>
+    </div>
+
+    <div class="cta-band reveal" style="margin-top:clamp(40px,12vw,140px)">
+      <span class="deco quarter" aria-hidden="true"></span>
+      <span class="deco ring" aria-hidden="true"></span>
+      <span class="deco dot" aria-hidden="true"></span>
+      <h2>一个窗口，搞定所有隧道</h2>
+      <p>快去试试吧！</p>
+      <div class="actions">
+        <a class="m3-btn filled large" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
+          <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>前往 Releases 下载</a>
+        <a class="m3-btn outlined large" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop" target="_blank" rel="noopener">
+          <svg class="ic" aria-hidden="true"><use href="#i-github"></use></svg>Star / Fork</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ============================== Footer ============================== -->
+<footer class="site">
+  <div class="shell">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <div class="b">
+          <svg viewBox="0 0 128 128" aria-hidden="true"><use href="#i-app"></use></svg>
+          <span>Cloudflared 隧道管理器</span>
+        </div>
+        <p>Cloudflared-Helper 的 GUI 继任者：管理多条 Cloudflare Tunnel（cloudflared access）连接，并内置 cloudflared 版本管理。Made with <span class="heart">❤</span> by lingyicute.</p>
+        <div class="foot-tags">
+          <span class="tag">Python</span><span class="tag">GTK4</span><span class="tag">libadwaita</span><span class="tag">AGPL-3.0</span>
+        </div>
+      </div>
+      <div class="foot-col">
+        <h4>项目</h4>
+        <a href="https://github.com/lingyicute/Cloudflared-Helper-Desktop" target="_blank" rel="noopener">GitHub 仓库</a>
+        <a href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0 许可</a>
+      </div>
+      <div class="foot-col">
+        <h4>跳转</h4>
+        <a href="#preview">界面预览</a>
+        <a href="#features">功能特性</a>
+        <a href="#workflow">快速开始</a>
+        <a href="#faq">常见问题</a>
+        <a href="#install">下载安装</a>
+      </div>
+      <div class="foot-col">
+        <h4>相关</h4>
+        <a href="https://github.com/lingyicute/Cloudflared-Helper" target="_blank" rel="noopener">Cloudflared-Helper（原项目）</a>
+        <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener">Cloudflare Tunnel 文档</a>
+        <a href="https://github.com/cloudflare/cloudflared" target="_blank" rel="noopener">cloudflare/cloudflared</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>Copyright © 2024–2026 lingyicute · 以 AGPL-3.0 授权发布</span>
+      <span>This website proudly features Material You design.</span>
+    </div>
+  </div>
+</footer>
+
+<button class="fab" id="backTop" type="button" aria-label="回到顶部" title="回到顶部">
+  <svg class="ic s20" aria-hidden="true"><use href="#i-chevron"></use></svg>
+</button>
+
+<div class="snack-host" id="snackHost" aria-live="polite"></div>
+
+<script>
+(function () {
+'use strict';
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+var store = {
+  get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>\"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function icon(name, cls) { return '<svg class="' + (cls || 'ic') + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>'; }
+function hhmmss(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0'); }
+function iso(d) { return d.toISOString().replace(/\\.\\d+Z$/, 'Z'); }
+function pad2(n) { return String(n).padStart(2, '0'); }
+function quickName(d) { return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + ' ' + hhmmss(d) + ' 快速隧道'; }
+function copyText(text, opts) {
+  opts = opts || {};
+  var done = function (ok) {
+    if (opts.onDone) opts.onDone(ok);
+    else snack(ok ? (opts.msg || '已复制到剪贴板') : '浏览器没有放行剪贴板，请手动复制');
+  };
+  var legacy = function () {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      done(ok);
+    } catch (e) { done(false); }
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, legacy);
+      return;
+    }
+  } catch (e) {}
+  legacy();
+}
+
+/* M3 Dynamic Color - OKLCH */
+function oklchToRgb(L, C, H) {
+  var h = H * Math.PI / 180, a = C * Math.cos(h), b = C * Math.sin(h);
+  var l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  var m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  var s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  var l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+  ];
+}
+function inGamut(c) { return c[0] >= -0.0005 && c[0] <= 1.0005 && c[1] >= -0.0005 && c[1] <= 1.0005 && c[2] >= -0.0005 && c[2] <= 1.0005; }
+function lin2srgb(x) { return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055; }
+function toHex(rgb) {
+  return '#' + rgb.map(function (v) {
+    var n = Math.round(Math.max(0, Math.min(1, lin2srgb(v))) * 255);
+    return (n < 16 ? '0' : '') + n.toString(16);
+  }).join('');
+}
+function oklchToHex(L, C, H) {
+  if (!inGamut(oklchToRgb(L, C, H))) {
+    var lo = 0, hi = C;
+    for (var i = 0; i < 18; i++) {
+      var mid = (lo + hi) / 2;
+      if (inGamut(oklchToRgb(L, mid, H))) lo = mid; else hi = mid;
+    }
+    C = lo;
+  }
+  return toHex(oklchToRgb(L, C, H));
+}
+function hexToOklch(hex) {
+  var h = hex.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  var srgb = [0, 1, 2].map(function (i) { return parseInt(h.substr(i * 2, 2), 16) / 255; });
+  var lin = srgb.map(function (v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  var r = lin[0], g = lin[1], b = lin[2];
+  var l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  var m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  var s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  var L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  var A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  var B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+  return [L, Math.sqrt(A * A + B * B), (Math.atan2(B, A) * 180 / Math.PI + 360) % 360];
+}
+var TONE_L = [[0, 0], [10, 0.196], [20, 0.272], [30, 0.352], [40, 0.437], [50, 0.529],
+              [60, 0.621], [70, 0.706], [80, 0.790], [90, 0.869], [95, 0.917], [99, 0.962], [100, 1]];
+function toneL(t) {
+  if (t <= 0) return 0;
+  if (t >= 100) return 1;
+  for (var i = 1; i < TONE_L.length; i++) {
+    if (t <= TONE_L[i][0]) {
+      var a = TONE_L[i - 1], b = TONE_L[i], k = (t - a[0]) / (b[0] - a[0]);
+      return a[1] + (b[1] - a[1]) * k;
+    }
+  }
+  return 1;
+}
+function chromaCurve(t) { return Math.pow(Math.sin(Math.PI * Math.max(0, Math.min(100, t)) / 100), 0.42); }
+
+function schemeFor(seedHex, dark) {
+  var s = hexToOklch(seedHex);
+  var C = Math.max(0.085, Math.min(0.185, s[1])), H = s[2];
+  function pal(scale, hue, c) { return function (t) { return oklchToHex(toneL(t), c * chromaCurve(t), H + hue); }; }
+  var pri = pal(1, 0, C), sec = pal(1, 0, C * 0.36), ter = pal(1, 60, C * 0.62);
+  var neu = pal(1, 0, 0.012), nv = pal(1, 0, 0.034);
+  var err = function (t) { return oklchToHex(toneL(t), 0.19 * chromaCurve(t), 27); };
+  if (!dark) return {
+    '--pri': pri(40), '--on-pri': '#ffffff', '--pri-c': pri(90), '--on-pri-c': pri(10),
+    '--sec': sec(40), '--on-sec': '#ffffff', '--sec-c': sec(90), '--on-sec-c': sec(10),
+    '--ter': ter(40), '--on-ter': '#ffffff', '--ter-c': ter(90), '--on-ter-c': ter(10),
+    '--err': err(40), '--on-err': '#ffffff', '--err-c': err(90), '--on-err-c': err(10),
+    '--surf': neu(98), '--on-surf': neu(10), '--surf-var': nv(90), '--on-surf-var': nv(30),
+    '--surf-lo': neu(100), '--surf-c-low': neu(96), '--surf-c': neu(94),
+    '--surf-c-high': neu(92), '--surf-c-highest': neu(90), '--surf-dim': neu(87), '--surf-bright': neu(98),
+    '--outline': nv(50), '--outline-var': nv(80),
+    '--inv-surf': neu(20), '--inv-on-surf': neu(95), '--inv-pri': pri(80), '--scrim': 'rgba(0,0,0,.32)',
+    '--md-sys-color-primary': pri(40), '--md-sys-color-on-primary': '#ffffff',
+    '--md-sys-color-primary-container': pri(90), '--md-sys-color-on-primary-container': pri(10),
+    '--md-sys-color-secondary': sec(40), '--md-sys-color-on-secondary': '#ffffff',
+    '--md-sys-color-secondary-container': sec(90), '--md-sys-color-on-secondary-container': sec(10),
+    '--md-sys-color-tertiary': ter(40), '--md-sys-color-on-tertiary': '#ffffff',
+    '--md-sys-color-tertiary-container': ter(90), '--md-sys-color-on-tertiary-container': ter(10),
+    '--md-sys-color-error': err(40), '--md-sys-color-on-error': '#ffffff',
+    '--md-sys-color-error-container': err(90), '--md-sys-color-on-error-container': err(10),
+    '--md-sys-color-surface': neu(98), '--md-sys-color-on-surface': neu(10),
+    '--md-sys-color-surface-variant': nv(90), '--md-sys-color-on-surface-variant': nv(30),
+    '--md-sys-color-surface-container-lowest': neu(100), '--md-sys-color-surface-container-low': neu(96),
+    '--md-sys-color-surface-container': neu(94), '--md-sys-color-surface-container-high': neu(92),
+    '--md-sys-color-surface-container-highest': neu(90), '--md-sys-color-surface-dim': neu(87),
+    '--md-sys-color-surface-bright': neu(98), '--md-sys-color-outline': nv(50),
+    '--md-sys-color-outline-variant': nv(80), '--md-sys-color-inverse-surface': neu(20),
+    '--md-sys-color-inverse-on-surface': neu(95), '--md-sys-color-inverse-primary': pri(80),
+    '--md-sys-color-scrim': 'rgba(0,0,0,.32)', '--md-sys-color-surface-tint': pri(40)
+  };
+  return {
+    '--pri': pri(80), '--on-pri': pri(20), '--pri-c': pri(30), '--on-pri-c': pri(90),
+    '--sec': sec(80), '--on-sec': sec(20), '--sec-c': sec(30), '--on-sec-c': sec(90),
+    '--ter': ter(80), '--on-ter': ter(20), '--ter-c': ter(30), '--on-ter-c': ter(90),
+    '--err': err(80), '--on-err': err(20), '--err-c': err(30), '--on-err-c': err(90),
+    '--surf': neu(6), '--on-surf': neu(90), '--surf-var': nv(30), '--on-surf-var': nv(80),
+    '--surf-lo': neu(4), '--surf-c-low': neu(10), '--surf-c': neu(12),
+    '--surf-c-high': neu(17), '--surf-c-highest': neu(22), '--surf-dim': neu(6), '--surf-bright': neu(24),
+    '--outline': nv(60), '--outline-var': nv(30),
+    '--inv-surf': neu(90), '--inv-on-surf': neu(20), '--inv-pri': pri(40), '--scrim': 'rgba(0,0,0,.55)',
+    '--md-sys-color-primary': pri(80), '--md-sys-color-on-primary': pri(20),
+    '--md-sys-color-primary-container': pri(30), '--md-sys-color-on-primary-container': pri(90),
+    '--md-sys-color-secondary': sec(80), '--md-sys-color-on-secondary': sec(20),
+    '--md-sys-color-secondary-container': sec(30), '--md-sys-color-on-secondary-container': sec(90),
+    '--md-sys-color-tertiary': ter(80), '--md-sys-color-on-tertiary': ter(20),
+    '--md-sys-color-tertiary-container': ter(30), '--md-sys-color-on-tertiary-container': ter(90),
+    '--md-sys-color-error': err(80), '--md-sys-color-on-error': err(20),
+    '--md-sys-color-error-container': err(30), '--md-sys-color-on-error-container': err(90),
+    '--md-sys-color-surface': neu(6), '--md-sys-color-on-surface': neu(90),
+    '--md-sys-color-surface-variant': nv(30), '--md-sys-color-on-surface-variant': nv(80),
+    '--md-sys-color-surface-container-lowest': neu(4), '--md-sys-color-surface-container-low': neu(10),
+    '--md-sys-color-surface-container': neu(12), '--md-sys-color-surface-container-high': neu(17),
+    '--md-sys-color-surface-container-highest': neu(22), '--md-sys-color-surface-dim': neu(6),
+    '--md-sys-color-surface-bright': neu(24), '--md-sys-color-outline': nv(60),
+    '--md-sys-color-outline-variant': nv(30), '--md-sys-color-inverse-surface': neu(90),
+    '--md-sys-color-inverse-on-surface': neu(20), '--md-sys-color-inverse-primary': pri(40),
+    '--md-sys-color-scrim': 'rgba(0,0,0,.55)', '--md-sys-color-surface-tint': pri(80)
+  };
+}
+var SEEDS = [
+  { hex: '#F26522', name: '应用橙（应用图标）' },
+  { hex: '#6750A4', name: 'M3 默认紫' },
+  { hex: '#1A73E8', name: '云蓝' },
+  { hex: '#2EC27E', name: '状态绿' },
+  { hex: '#D8437A', name: '玫瑰' }
+];
+var theme = { dark: false, seed: SEEDS[0].hex };
+
+function applyTheme(animate) {
+  var root = document.documentElement;
+  if (animate) root.style.transition = 'background-color .35s ease, color .35s ease';
+  root.setAttribute('data-theme', theme.dark ? 'dark' : 'light');
+  root.style.colorScheme = theme.dark ? 'dark' : 'light';
+  var vars = schemeFor(theme.seed, theme.dark);
+  for (var k in vars) if (vars.hasOwnProperty(k)) root.style.setProperty(k, vars[k]);
+  var meta = $('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', vars['--md-sys-color-surface-container-low']);
+  var btn = $('#themeBtn');
+  if (btn) {
+    btn.innerHTML = icon(theme.dark ? 'sun' : 'moon', 'ic s20');
+    btn.setAttribute('aria-label', theme.dark ? '切换到浅色主题' : '切换到深色主题');
+    btn.title = btn.getAttribute('aria-label');
+  }
+  $$('.seed').forEach(function (b) {
+    b.setAttribute('aria-pressed', String(b.dataset.seed.toLowerCase() === theme.seed.toLowerCase()));
+    b.style.color = b.dataset.seed;
+    b.style.background = b.dataset.seed;
+  });
+}
+function snack(msg) {
+  var host = $('#snackHost');
+  var n = document.createElement('div');
+  n.className = 'snack';
+  n.innerHTML = '<span>' + esc(msg) + '</span>';
+  host.appendChild(n);
+  while (host.children.length > 2) host.removeChild(host.firstChild);
+  setTimeout(function () { n.classList.add('leaving'); setTimeout(function () { n.remove(); }, 200); }, 2600);
+}
+
+/* Data layer */
+var STATE_LABELS = { stopped: '已停止', starting: '正在连接…', running: '已连接', error: '连接失败' };
+var BIN_DIR = '~/.local/share/cloudflared-tunnel-manager/versions';
+var V = {
+  platform: 'linux', arch: 'amd64', asset: 'cloudflared-linux-amd64',
+  activePolicy: 'latest-installed',
+  installed: ['2026.9.0', '2026.8.3'],
+  systemBinary: '/usr/bin/cloudflared',
+  systemVersion: '2026.7.1',
+  latestStable: '2026.9.1',
+  releases: [
+    { tag: '2026.9.1', date: '2026-09-11' },
+    { tag: '2026.9.0', date: '2026-09-09' },
+    { tag: '2026.8.3', date: '2026-08-31' },
+    { tag: '2026.8.2', date: '2026-08-14' },
+    { tag: '2026.8.1', date: '2026-08-13' },
+    { tag: '2026.8.0', date: '2026-08-13' }
+  ]
+};
+function binPath(tag) { return BIN_DIR + '/' + tag + '/cloudflared'; }
+function isInstalled(tag) { return V.installed.indexOf(tag) !== -1; }
+function currentBinary() {
+  if (V.activePolicy === 'system' && V.systemBinary) return { version: V.systemVersion, path: V.systemBinary };
+  if (V.activePolicy !== 'system' && V.activePolicy !== 'latest-installed') return { version: V.activePolicy, path: binPath(V.activePolicy) };
+  if (V.installed.length) return { version: V.installed[0], path: binPath(V.installed[0]) };
+  if (V.systemBinary) return { version: V.systemVersion, path: V.systemBinary };
+  return null;
+}
+function tunnel(name, hostname, port, opt) {
+  var o = opt || {};
+  return {
+    id: 't' + Math.random().toString(36).slice(2, 9),
+    name: name, hostname: hostname, port: port,
+    listen: o.listen || '127.0.0.1', autostart: !!o.autostart,
+    state: o.state || 'stopped', lastError: o.lastError || null,
+    flaky: !!o.flaky, logs: []
+  };
+}
+var tunnels = [];
+var quickClipboardHost = 'calm-frost-lantern-4t.trycloudflare.com';
+function seedData() {
+  var now = Date.now();
+  tunnels = [
+    tunnel('家庭 NAS 管理面板', 'nas-panel.example.com', 21128, { autostart: true, state: 'running' }),
+    tunnel(quickName(new Date(now - 42 * 60000)), quickClipboardHost, 8080, { state: 'running' }),
+    tunnel('公司 Windows 远程桌面', 'rdp-office.example.com', 3390, { state: 'stopped', flaky: true }),
+    tunnel('MySQL 只读副本', 'db-readonly.example.com', 13306, { listen: '0.0.0.0', state: 'error' })
+  ];
+  var t0 = tunnels[0], t1 = tunnels[1], t3 = tunnels[3];
+  var s0 = new Date(now - 51 * 60000), s1 = new Date(now - 42 * 60000), s3 = new Date(now - 96 * 60000);
+  t0.logs = [
+    logAt(s0, '$ cloudflared access tcp --hostname nas-panel.example.com --url 127.0.0.1:21128'),
+    logAt(s0, iso(s0) + ' INF Starting tunnel client'),
+    logAt(s0, iso(s0) + ' INF Version 2026.9.0 (Checksum 5c8a2c4f)'),
+    logAt(new Date(s0.getTime() + 900), iso(new Date(s0.getTime() + 900)) + ' INF Start Websocket listener host=127.0.0.1:21128'),
+    logAt(new Date(s0.getTime() + 1400), iso(new Date(s0.getTime() + 1400)) + ' INF Connection registered connIndex=0 location=HKG')
+  ];
+  t1.logs = [
+    logAt(s1, '$ cloudflared access tcp --hostname ' + quickClipboardHost + ' --url 127.0.0.1:8080'),
+    logAt(s1, iso(s1) + ' INF Starting tunnel client'),
+    logAt(s1, iso(s1) + ' INF Version 2026.9.0 (Checksum 5c8a2c4f)'),
+    logAt(new Date(s1.getTime() + 800), iso(new Date(s1.getTime() + 800)) + ' INF Start Websocket listener host=127.0.0.1:8080'),
+    logAt(new Date(s1.getTime() + 1300), iso(new Date(s1.getTime() + 1300)) + ' INF Connection registered connIndex=0 location=HKG'),
+    logAt(new Date(now - 6 * 60000), iso(new Date(now - 6 * 60000)) + ' WRN Failed to dial to edge with quic: timeout (retrying with http2)'),
+    logAt(new Date(now - 6 * 60000 + 2200), iso(new Date(now - 6 * 60000 + 2200)) + ' INF Connection registered connIndex=0 location=HKG')
+  ];
+  t3.logs = [
+    logAt(s3, '$ cloudflared access tcp --hostname db-readonly.example.com --url 0.0.0.0:13306'),
+    logAt(s3, iso(s3) + ' INF Starting tunnel client'),
+    logAt(new Date(s3.getTime() + 700), iso(new Date(s3.getTime() + 700)) + ' INF Start Websocket listener host=0.0.0.0:13306'),
+    logAt(new Date(s3.getTime() + 2600), iso(new Date(s3.getTime() + 2600)) + ' ERR Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared'),
+    logAt(new Date(s3.getTime() + 2600), iso(new Date(s3.getTime() + 2600)) + ' ERR Failed to connect to origin error="dial tcp 10.0.0.12:3306: connect: connection refused"'),
+    logAt(new Date(s3.getTime() + 2800), '[进程已退出，状态码 1]')
+  ];
+  t3.lastError = 'Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared';
+}
+function logAt(d, text) { return '[' + hhmmss(d) + '] ' + text; }
+function displayName(t) { return (t.name || '').trim() || t.hostname || '未命名隧道'; }
+function isActive(t) { return t.state === 'running' || t.state === 'starting'; }
+function find(id) { return tunnels.filter(function (t) { return t.id === id; })[0] || null; }
+function runningCount() { return tunnels.filter(isActive).length; }
+function commandFor(t) { return 'cloudflared access tcp --hostname ' + t.hostname + ' --url ' + t.listen + ':' + t.port; }
+
+var mock = $('#mock'), scrim = $('#scrim'), toastHost = $('#toastHost');
+function toast(msg, action) {
+  var n = document.createElement('div');
+  n.className = 'toast';
+  n.innerHTML = '<span class="msg">' + esc(msg) + '</span>';
+  var close = function () {
+    n.classList.add('leaving');
+    setTimeout(function () { n.remove(); }, 200);
+  };
+  if (action) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = action.label;
+    b.addEventListener('click', function () { close(); action.fn && action.fn(); });
+    n.appendChild(b);
+  }
+  toastHost.appendChild(n);
+  while (toastHost.children.length > 3) toastHost.removeChild(toastHost.firstChild);
+  setTimeout(close, action ? 6000 : 3800);
+}
+function dialogToast(node, msg) {
+  var host = node.querySelector('.dlg-toasts');
+  if (!host) return;
+  var n = document.createElement('div');
+  n.className = 'toast';
+  n.innerHTML = '<span class="msg">' + esc(msg) + '</span>';
+  host.appendChild(n);
+  setTimeout(function () { n.classList.add('leaving'); setTimeout(function () { n.remove(); }, 200); }, 2800);
+}
+
+var popNode = null;
+function closePopover() {
+  if (popNode) { popNode.remove(); popNode = null; }
+}
+function openPopover(anchor, items) {
+  closePopover();
+  var pop = document.createElement('div');
+  pop.className = 'mock-popover';
+  pop.innerHTML = items.map(function (it, i) {
+    if (it === '-') return '<div class="sep"></div>';
+    return '<button type="button" data-i="' + i + '"' + (it.checked !== undefined ? ' aria-checked="' + it.checked + '"' : '') + '>' +
+      (it.icon ? icon(it.icon) : '') + '<span>' + esc(it.label) + '</span>' +
+      (it.checked !== undefined ? '<svg class="ic tick" aria-hidden="true"><use href="#i-check"></use></svg>' : '') +
+      '</button>';
+  }).join('');
+  mock.appendChild(pop);
+  pop.style.visibility = 'hidden';
+  var mr = mock.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+  var scale = mr.width / 980 || 1;
+  var pw = pop.getBoundingClientRect().width / scale;
+  var left = (ar.right - mr.left) / scale - pw;
+  var top = (ar.bottom - mr.top) / scale + 6;
+  if (top + pop.getBoundingClientRect().height / scale > 660) top = Math.max(8, (ar.top - mr.top) / scale - pop.getBoundingClientRect().height / scale - 6);
+  pop.style.left = Math.max(8, Math.min(980 - pw - 8, left)) + 'px';
+  pop.style.top = Math.max(8, top) + 'px';
+  pop.style.visibility = '';
+  pop.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-i]'); if (!b) return;
+    var it = items[+b.dataset.i];
+    closePopover();
+    it.fn && it.fn();
+  });
+  popNode = pop;
+}
+function messageDialog(opt) {
+  return new Promise(function (resolve) {
+    var wrap = document.createElement('div');
+    wrap.className = 'dialog msgdialog';
+    wrap.innerHTML =
+      '<h4>' + esc(opt.heading) + '</h4>' +
+      '<div class="body">' + (opt.bodyHTML || esc(opt.body || '')) + '</div>' +
+      '<div class="actions"></div>' +
+      '<div class="toast-host dlg-toasts" style="bottom:6px"></div>';
+    var actions = wrap.querySelector('.actions');
+    (opt.buttons || []).forEach(function (bt, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'gtk-btn' + (bt.style === 'suggested' ? ' suggested' : bt.style === 'destructive' ? ' destructive' : '');
+      b.textContent = bt.label;
+      b.addEventListener('click', function () { closeDialog(); resolve(bt.value !== undefined ? bt.value : bt.label); });
+      actions.appendChild(b);
+      if (i === (opt.buttons.length - 1)) setTimeout(function () { b.focus(); }, 30);
+    });
+    openDialog(wrap, function () { resolve(null); });
+  });
+}
+var dialogCloseHook = null;
+function openDialog(node, onCancel) {
+  closePopover();
+  scrim.innerHTML = '';
+  scrim.appendChild(node);
+  scrim.classList.add('show');
+  dialogCloseHook = onCancel || null;
+}
+function closeDialog() {
+  scrim.classList.remove('show');
+  scrim.innerHTML = '';
+  dialogCloseHook = null;
+}
+function dialogOpen() { return scrim.classList.contains('show'); }
+
+var tunnelList = $('#tunnelList'), emptyState = $('#emptyState');
+function renderTunnels() {
+  var active = runningCount(), total = tunnels.length;
+  $('#mockSummary').textContent = total ? (active + ' / ' + total + ' 个隧道运行中') : '隧道';
+  var bin = currentBinary();
+  $('#mockBinary').textContent = bin ? ('cloudflared ' + (bin.version || '(未知版本)') + ' · ' + bin.path) : 'cloudflared：未安装';
+  emptyState.style.display = total ? 'none' : '';
+  tunnelList.style.display = total ? '' : 'none';
+  tunnelList.innerHTML = tunnels.map(function (t) {
+    var st = t.state, act = isActive(t), chip = st === 'stopped' ? '' : st;
+    return '<div class="row" data-id="' + t.id + '">' +
+      '<span class="dot ' + chip + '" title="' + STATE_LABELS[st] + '"></span>' +
+      '<div class="row-main">' +
+        '<span class="row-title">' + esc(displayName(t)) + '</span>' +
+        '<span class="row-sub">' + esc(t.hostname) + '  →  ' + esc(t.listen) + ':' + t.port + (t.autostart ? '  ·  自动连接' : '') + '</span>' +
+      '</div>' +
+      '<div class="row-actions">' +
+        '<span class="state-chip ' + chip + '">' + STATE_LABELS[st] + '</span>' +
+        '<button class="circ-btn' + (act ? ' stop' : '') + '" data-act="toggle" type="button" title="' + (act ? '断开' : '连接') + '" aria-label="' + (act ? '断开' : '连接') + '">' +
+          icon(act ? 'stop' : 'play') + '</button>' +
+        '<button class="row-icon-btn" data-act="logs" type="button" title="查看日志" aria-label="查看日志">' + icon('terminal') + '</button>' +
+        '<button class="row-icon-btn" data-act="menu" type="button" title="更多操作" aria-label="更多操作" aria-haspopup="true">' + icon('more') + '</button>' +
+      '</div></div>';
+  }).join('');
+}
+function setState(t, st) {
+  if (t.state === st) return;
+  t.state = st;
+  renderTunnels();
+  if (logTarget === t) renderLog();
+}
+function pushLog(t, text) {
+  var d = new Date();
+  var line = logAt(d, text);
+  t.logs.push(line);
+  if (t.logs.length > 3000) t.logs.splice(0, 300);
+  if (logTarget === t) {
+    appendLogLine(line);
+    if (logFollow) { var v = $('#logView'); v.scrollTop = v.scrollHeight; }
+  }
+}
+function portConflict(t) {
+  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase(); return (h === 'localhost' || h === '::1') ? '127.0.0.1' : h; };
+  var any = ['0.0.0.0', '::', '0:0:0:0:0:0:0:0'];
+  return tunnels.filter(function (p) {
+    if (p === t || !isActive(p) || p.port !== t.port) return false;
+    var a = norm(p.listen), b = norm(t.listen);
+    return any.indexOf(a) !== -1 || any.indexOf(b) !== -1 || a === b;
+  })[0] || null;
+}
+function startTunnel(id) {
+  var t = find(id);
+  if (!t || isActive(t)) return false;
+  var host = (t.hostname || '').trim();
+  if (!host || host.indexOf(' ') !== -1) { toast('「' + displayName(t) + '」的隧道主机名无效，请先编辑修正'); return false; }
+  var bin = currentBinary();
+  if (!bin) {
+    toast('未找到 cloudflared，请先在“版本管理”中安装');
+    switchPage('versions');
+    return false;
+  }
+  var conflict = portConflict(t);
+  if (conflict) { toast('端口 ' + t.port + ' 已被「' + displayName(conflict) + '」占用'); return false; }
+
+  t.lastError = null;
+  setState(t, 'starting');
+  pushLog(t, '$ cloudflared access tcp --hostname ' + host + ' --url ' + t.listen + ':' + t.port);
+  var fail = t.flaky;
+  t.flaky = false;
+  setTimeout(function () {
+    if (t.state !== 'starting') return;
+    pushLog(t, iso(new Date()) + ' INF Starting tunnel client');
+    pushLog(t, iso(new Date()) + ' INF Version ' + bin.version + ' (Checksum 5c8a2c4f)');
+  }, 420);
+  setTimeout(function () {
+    if (t.state !== 'starting') return;
+    if (fail) {
+      pushLog(t, iso(new Date()) + ' ERR Failed to connect to the tunnel. The tunnel may be down or the hostname may be wrong');
+      pushLog(t, iso(new Date()) + ' ERR Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared');
+      t.lastError = 'Unable to reach the origin service.';
+      pushLog(t, '[进程已退出，状态码 1]');
+      setState(t, 'error');
+      toast('「' + displayName(t) + '」连接失败：' + t.lastError, { label: '日志', fn: function () { openLogs(t.id); } });
+      return;
+    }
+    pushLog(t, iso(new Date()) + ' INF Start Websocket listener host=' + t.listen + ':' + t.port);
+    setState(t, 'running');
+    toast('「' + displayName(t) + '」已连接：' + t.listen + ':' + t.port);
+  }, 1700);
+  setTimeout(function () {
+    if (isActive(t) && t.state === 'running') pushLog(t, iso(new Date()) + ' INF Connection registered connIndex=0 location=HKG');
+  }, 2900);
+  return true;
+}
+function stopTunnel(id) {
+  var t = find(id);
+  if (!t || !isActive(t)) return;
+  pushLog(t, '[正在断开…]');
+  setTimeout(function () {
+    pushLog(t, iso(new Date()) + ' INF Connection closed connIndex=0');
+    pushLog(t, '[进程已退出，状态码 0]');
+    setState(t, 'stopped');
+  }, 620);
+}
+function toggleTunnel(id) { var t = find(id); if (!t) return; isActive(t) ? stopTunnel(id) : startTunnel(id); }
+function startAll() {
+  if (!tunnels.length) return;
+  if (!currentBinary()) {
+    toast('未找到 cloudflared，请先在“版本管理”中安装');
+    switchPage('versions');
+    return;
+  }
+  var started = 0;
+  tunnels.forEach(function (t) {
+    if (!isActive(t)) { if (startTunnel(t.id)) started++; }
+  });
+  if (started) toast('已自动连接 ' + started + ' 个隧道');
+}
+function stopAll() {
+  tunnels.forEach(function (t) { if (isActive(t)) stopTunnel(t.id); });
+}
+function openLogs(id) {
+  var t = find(id);
+  if (!t) return;
+  logTarget = t;
+  logWin.classList.add('show');
+  $('#logTitle').textContent = displayName(t);
+  $('#logState').textContent = STATE_LABELS[t.state];
+  renderLog();
+}
+
+var logWin = $('#logWin'), logView = $('#logView'), logTarget = null, logFollow = true;
+function logClass(line) {
+  var body = line.replace(/^\[[^\]]*\]\s*/, '');
+  if (/\bERR\b/.test(body) || /^error\b/i.test(body)) return 'err';
+  if (body.charAt(0) === '$' || body.charAt(0) === '[') return 'dim';
+  return '';
+}
+function logLineHTML(line) {
+  var c = logClass(line);
+  return '<span class="l' + (c ? ' ' + c : '') + '">' + esc(line) + '</span>';
+}
+function renderLog() {
+  if (!logTarget) return;
+  $('#logTitle').textContent = displayName(logTarget);
+  $('#logState').textContent = STATE_LABELS[logTarget.state];
+  var lines = logTarget.logs.slice(-400);
+  logView.innerHTML = lines.length ? lines.map(logLineHTML).join('') :
+    '<span class="log-empty">日志为空</span>';
+  if (logFollow) logView.scrollTop = logView.scrollHeight;
+}
+function appendLogLine(line) {
+  if (logView.firstChild && logView.firstChild.className === 'log-empty') logView.innerHTML = '';
+  var span = document.createElement('span');
+  span.className = 'l' + (logClass(line) ? ' ' + logClass(line) : '');
+  span.textContent = line;
+  logView.appendChild(span);
+  while (logView.children.length > 500) logView.removeChild(logView.firstChild);
+}
+$('#logClose').addEventListener('click', function () { logWin.classList.remove('show'); logTarget = null; });
+$('#logClear').addEventListener('click', function () {
+  if (!logTarget) return;
+  logTarget.logs.length = 0;
+  renderLog();
+});
+$('#logCopy').addEventListener('click', function () {
+  if (!logTarget) return;
+  copyText(logTarget.logs.join('\n'), { onDone: function (ok) { toast(ok ? '日志已复制到剪贴板' : '浏览器没有放行剪贴板'); } });
+});
+$('#logFollow').addEventListener('click', function () {
+  logFollow = !logFollow;
+  this.setAttribute('aria-pressed', String(logFollow));
+  this.style.background = logFollow ? 'var(--adw-raised)' : '';
+  if (logFollow) logView.scrollTop = logView.scrollHeight;
+});
+$('#logFollow').style.background = 'var(--adw-raised)';
+logView.addEventListener('scroll', function () {
+  var atBottom = logView.scrollHeight - logView.scrollTop - logView.clientHeight < 24;
+  if (!atBottom && logFollow) {
+    logFollow = false;
+    $('#logFollow').setAttribute('aria-pressed', 'false');
+    $('#logFollow').style.background = '';
+  }
+});
+
+var prefsRoot = $('#prefsRoot'), downloads = {}, refreshing = false;
+function verCmp(a, b) {
+  var pa = String(a).split(/[^\d]+/).filter(Boolean).map(Number);
+  var pb = String(b).split(/[^\d]+/).filter(Boolean).map(Number);
+  for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+    var x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+function renderPrefs() {
+  var cur = currentBinary();
+  var choices = [
+    { key: 'latest-installed', title: '自动：最新已安装版本', sub: V.installed.length ? ('当前解析为 ' + V.installed[0]) : '尚未安装任何版本，将回退到系统 PATH' },
+    { key: 'system', title: '系统 PATH 中的 cloudflared', sub: V.systemBinary || '未在 PATH 中找到', sensitive: !!V.systemBinary }
+  ].concat(V.installed.map(function (tag) { return { key: tag, title: tag, sub: binPath(tag), deletable: true }; }));
+
+  prefsRoot.innerHTML =
+    '<div class="pref-group">' +
+      '<div class="pref-head"><div class="ptxt">' +
+        '<div class="pref-title">当前使用的 cloudflared</div>' +
+        '<div class="pref-desc">平台 ' + V.platform + '/' + V.arch + ' · 资源名 ' + V.asset + '</div>' +
+      '</div></div>' +
+      '<div class="pref-box"><div class="pref-row">' +
+        icon(cur ? 'check' : 'error', 'ic lead-ic') +
+        '<div class="row-main">' +
+          '<span class="row-title">' + (cur ? ('cloudflared ' + cur.version) : '未找到可用的 cloudflared') + '</span>' +
+          '<span class="row-sub">' + (cur ? esc(cur.path) : '请在下方安装一个版本，或将 cloudflared 放入 PATH') + '</span>' +
+        '</div>' +
+        '<button class="row-icon-btn" id="vRefresh" type="button" title="重新检测" aria-label="重新检测">' + icon('refresh') + '</button>' +
+      '</div></div>' +
+    '</div>' +
+
+    '<div class="pref-group">' +
+      '<div class="pref-head"><div class="ptxt">' +
+        '<div class="pref-title">版本选择</div>' +
+        '<div class="pref-desc">决定启动隧道时使用哪个 cloudflared 二进制文件。</div>' +
+      '</div>' +
+      '<button class="row-icon-btn" id="vOpenDir" type="button" title="打开安装目录" aria-label="打开安装目录">' + icon('folder') + '</button>' +
+      '</div>' +
+      '<div class="pref-box">' + choices.map(function (c) {
+        return '<div class="pref-row" data-choice="' + esc(c.key) + '" role="radio" aria-checked="' + (V.activePolicy === c.key) + '"' +
+          (c.sensitive === false ? ' aria-disabled="true"' : '') + ' tabindex="0">' +
+          '<span class="radio"></span>' +
+          '<div class="row-main"><span class="row-title">' + esc(c.title) + '</span><span class="row-sub">' + esc(c.sub) + '</span></div>' +
+          (c.deletable ? '<button class="row-icon-btn" data-del="' + esc(c.key) + '" type="button" title="删除此版本" aria-label="删除此版本">' + icon('trash') + '</button>' : '') +
+        '</div>';
+      }).join('') + '</div>' +
+    '</div>' +
+
+    '<div class="pref-group">' +
+      '<div class="pref-head"><div class="ptxt">' +
+        '<div class="pref-title">GitHub 发布版本</div>' +
+        '<div class="pref-desc">来源：cloudflare/cloudflared 官方仓库 · 最新稳定版 ' + V.latestStable + '</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<span class="spinner" id="vSpin" style="display:none"></span>' +
+        '<button class="gtk-btn suggested" id="vInstallLatest" type="button">安装最新版</button>' +
+        '<button class="row-icon-btn" id="vRefreshList" type="button" title="刷新列表" aria-label="刷新列表">' + icon('refresh') + '</button>' +
+      '</div></div>' +
+      '<div class="pref-box">' + V.releases.map(function (r) {
+        var parts = [r.date];
+        if (r.prerelease) parts.push('预发布');
+        if (r.hasAsset === false) parts.push('无 ' + V.asset + ' 资源');
+        var suffix;
+        if (downloads[r.tag] != null) {
+          suffix = '<div class="progress" data-progress="' + r.tag + '"><div class="bar" style="width:' + downloads[r.tag] + '%"></div><span>' +
+            Math.round(downloads[r.tag]) + '% · ' + speedFor(r.tag) + '</span></div>' +
+            '<button class="row-icon-btn" data-cancel="' + r.tag + '" type="button" title="取消" aria-label="取消">' + icon('close') + '</button>';
+        } else if (isInstalled(r.tag)) {
+          suffix = '<span class="installed-badge">' + icon('check') + '已安装</span>';
+        } else {
+          suffix = '<button class="row-icon-btn" data-dl="' + r.tag + '" type="button" title="下载并安装此版本" aria-label="下载并安装此版本"' +
+            (r.hasAsset === false ? ' aria-disabled="true" style="opacity:.45;pointer-events:none"' : '') + '>' + icon('download') + '</button>';
+        }
+        return '<div class="pref-row" data-tag="' + r.tag + '">' +
+          '<div class="row-main"><span class="row-title">' + r.tag + '</span><span class="row-sub">' + parts.join(' · ') + '</span></div>' +
+          suffix + '</div>';
+      }).join('') + '</div>' +
+    '</div>';
+  wirePrefs();
+}
+var speeds = {};
+function speedFor(tag) {
+  if (speeds[tag] == null) speeds[tag] = (8 + Math.random() * 14).toFixed(1);
+  return speeds[tag];
+}
+function wirePrefs() {
+  var r = $('#vRefresh');
+  if (r) r.addEventListener('click', function () {
+    r.innerHTML = '<span class="spinner"></span>';
+    setTimeout(function () {
+      renderPrefs();
+      var cur = currentBinary();
+      toast('已重新检测 cloudflared 版本：' + (cur ? cur.version : '未找到'));
+    }, 900);
+  });
+  var od = $('#vOpenDir');
+  if (od) od.addEventListener('click', function () { toast('演示：真实应用会打开 ' + BIN_DIR); });
+  var il = $('#vInstallLatest');
+  if (il) il.addEventListener('click', function () {
+    if (isInstalled(V.latestStable)) toast('最新版 ' + V.latestStable + ' 已安装');
+    else if (downloads[V.latestStable] != null) toast('正在下载 ' + V.latestStable + '…');
+    else downloadVersion(V.latestStable);
+  });
+  var rl = $('#vRefreshList');
+  if (rl) rl.addEventListener('click', function () {
+    if (refreshing) return;
+    refreshing = true;
+    var sp = $('#vSpin');
+    sp.style.display = '';
+    rl.style.opacity = '.5';
+    setTimeout(function () {
+      refreshing = false;
+      sp.style.display = 'none';
+      rl.style.opacity = '';
+      var newest = V.installed[0];
+      if (newest && verCmp(newest, V.latestStable) < 0) toast('有新版本可用：' + V.latestStable + '（已安装 ' + newest + '）');
+      else toast('版本列表已是最新（' + V.releases.length + ' 条）');
+    }, 1300);
+  });
+  prefsRoot.querySelectorAll('[data-dl]').forEach(function (b) {
+    b.addEventListener('click', function () { downloadVersion(b.dataset.dl); });
+  });
+  prefsRoot.querySelectorAll('[data-cancel]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var tag = b.dataset.cancel;
+      delete downloads[tag];
+      renderPrefs();
+      toast('已取消安装 ' + tag);
+    });
+  });
+  prefsRoot.querySelectorAll('[data-del]').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var tag = b.dataset.del;
+      messageDialog({
+        heading: '删除 cloudflared ' + tag + '？',
+        body: '正在使用此版本运行的隧道不会被中断，但之后将无法再用它启动。',
+        buttons: [{ label: '取消', value: 'cancel' }, { label: '删除', value: 'delete', style: 'destructive' }]
+      }).then(function (v) {
+        if (v !== 'delete') return;
+        V.installed = V.installed.filter(function (x) { return x !== tag; });
+        if (V.activePolicy === tag) V.activePolicy = 'latest-installed';
+        renderPrefs(); renderTunnels();
+        toast('已删除 cloudflared ' + tag);
+      });
+    });
+  });
+  prefsRoot.querySelectorAll('[data-choice]').forEach(function (row) {
+    var pick = function () {
+      if (row.getAttribute('aria-disabled') === 'true') return;
+      var key = row.dataset.choice;
+      if (V.activePolicy === key) return;
+      V.activePolicy = key;
+      renderPrefs(); renderTunnels();
+      toast('已切换 cloudflared 版本策略，新启动的隧道将使用新版本');
+    };
+    row.addEventListener('click', function (e) { if (!e.target.closest('[data-del]')) pick(); });
+    row.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+}
+function downloadVersion(tag) {
+  if (isInstalled(tag) || downloads[tag] != null) return;
+  delete speeds[tag];
+  downloads[tag] = 0;
+  renderPrefs();
+  var iv = setInterval(function () {
+    var pct = downloads[tag] + 4 + Math.random() * 9;
+    if (pct >= 100) {
+      clearInterval(iv);
+      delete downloads[tag];
+      V.installed.push(tag);
+      V.installed.sort(function (a, b) { return verCmp(b, a); });
+      toast('cloudflared ' + tag + ' 安装完成');
+      renderPrefs(); renderTunnels();
+      return;
+    }
+    downloads[tag] = pct;
+    var bar = prefsRoot.querySelector('[data-progress="' + tag + '"] .bar');
+    var txt = prefsRoot.querySelector('[data-progress="' + tag + '"] span');
+    if (bar) bar.style.width = pct + '%';
+    if (txt) txt.textContent = Math.round(pct) + '% · ' + speedFor(tag) + ' MB/s';
+  }, 300);
+}
+
+function openTunnelDialog(cfg, isNew, focusPort) {
+  cfg = cfg || {};
+  var d = {
+    name: cfg.name || '', hostname: cfg.hostname || '',
+    port: cfg.port != null ? cfg.port : 21128,
+    listen: cfg.listen || '127.0.0.1', autostart: !!cfg.autostart, extra: cfg.extra || ''
+  };
+  var node = document.createElement('div');
+  node.className = 'dialog window-dialog';
+  node.innerHTML =
+    '<div class="dlg-titlebar">' +
+      '<button class="gtk-btn flat" data-x="cancel" type="button">取消</button>' +
+      '<div class="t">' + (isNew ? '新建隧道' : '编辑隧道') + '</div>' +
+      '<button class="gtk-btn suggested" data-x="save" type="button">保存</button>' +
+    '</div>' +
+    '<div class="dlg-body">' +
+      '<div class="prefs">' +
+        '<div class="pref-group">' +
+          '<div class="pref-head"><div class="ptxt"><div class="pref-title">基本信息</div></div></div>' +
+          '<div class="pref-box">' +
+            '<div class="pref-row entryrow"><span class="label">名称（可选）</span>' +
+              '<input class="entry" data-f="name" type="text" value="' + esc(d.name) + '" placeholder="例如：家庭 NAS 管理面板"></div>' +
+            '<div class="pref-row entryrow"><span class="label">隧道主机名 (hostname)</span>' +
+              '<input class="entry" data-f="hostname" type="text" value="' + esc(d.hostname) + '" placeholder="ssh.example.com"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="pref-group">' +
+          '<div class="pref-head"><div class="ptxt">' +
+            '<div class="pref-title">本地监听</div>' +
+            '<div class="pref-desc">cloudflared 会在本机监听该地址，并将流量转发至隧道另一端。</div>' +
+          '</div></div>' +
+          '<div class="pref-box">' +
+            '<div class="pref-row"><span style="flex:1">本地端口</span>' +
+              '<div class="spin">' +
+                '<input type="number" min="1" max="65535" data-f="port" value="' + d.port + '">' +
+                '<div class="spin-btns">' +
+                  '<button type="button" data-step="1" aria-label="增加" style="transform:rotate(180deg)">' + icon('chevron', 'ic') + '</button>' +
+                  '<button type="button" data-step="-1" aria-label="减少">' + icon('chevron', 'ic') + '</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pref-row entryrow"><span class="label">监听地址</span>' +
+              '<input class="entry" data-f="listen" type="text" value="' + esc(d.listen) + '"></div>' +
+            '<div class="pref-row warn" data-warn hidden>' + icon('warning', 'ic lead-ic') +
+              '<span>端口低于 1024 属于周知端口，可能需要管理员权限 (sudo)</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="pref-group">' +
+          '<div class="pref-head"><div class="ptxt"><div class="pref-title">高级</div></div></div>' +
+          '<div class="pref-box">' +
+            '<div class="pref-row"><span style="flex:1">程序启动时自动连接</span>' +
+              '<button class="switch" type="button" role="switch" data-f="autostart" aria-checked="' + d.autostart + '" aria-label="程序启动时自动连接"></button></div>' +
+            '<div class="pref-row entryrow"><span class="label">额外命令行参数（可选）</span>' +
+              '<input class="entry" data-f="extra" type="text" value="' + esc(d.extra) + '" placeholder="--no-autoupdate"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="toast-host dlg-toasts"></div>' +
+    '</div>';
+
+  var q = function (f) { return node.querySelector('[data-f="' + f + '"]'); };
+  var portInput = q('port'), warn = node.querySelector('[data-warn]');
+  function syncWarn() {
+    var v = parseInt(portInput.value, 10);
+    warn.hidden = !(v >= 1 && v < 1024);
+  }
+  portInput.addEventListener('input', syncWarn);
+  syncWarn();
+  node.querySelectorAll('[data-step]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = parseInt(portInput.value, 10) || 0;
+      v = Math.max(1, Math.min(65535, v + (+b.dataset.step)));
+      portInput.value = v; syncWarn();
+    });
+  });
+  var sw = q('autostart');
+  sw.addEventListener('click', function () { sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); });
+
+  function save() {
+    var name = q('name').value.trim(), host = q('hostname').value.trim();
+    if (!host || /\s/.test(host)) {
+      dialogToast(node, '请输入有效的隧道主机名（不能包含空格）');
+      q('hostname').focus(); return;
+    }
+    var port = parseInt(portInput.value, 10);
+    if (!(port >= 1 && port <= 65535)) { dialogToast(node, '端口必须在 1 到 65535 之间'); portInput.focus(); return; }
+    var extra = q('extra').value.trim();
+    if (extra) {
+      var dq = (extra.match(/"/g) || []).length, sq = (extra.match(/'/g) || []).length;
+      if (dq % 2 || sq % 2) { dialogToast(node, '额外参数格式错误: No closing quotation'); q('extra').focus(); return; }
+    }
+    var listen = q('listen').value.trim() || '127.0.0.1';
+    if (/\s/.test(listen)) { dialogToast(node, '监听地址不能包含空格'); q('listen').focus(); return; }
+    var autostart = q('autostart').getAttribute('aria-checked') === 'true';
+    if (isNew) {
+      var t = tunnel(name, host, port, { listen: listen, autostart: autostart });
+      tunnels.push(t);
+      renderTunnels();
+      toast('已添加隧道「' + displayName(t) + '」');
+    } else {
+      var cur = find(cfg.id);
+      if (cur) {
+        var was = isActive(cur);
+        cur.name = name; cur.hostname = host; cur.port = port; cur.listen = listen; cur.autostart = autostart;
+        renderTunnels();
+        if (was) toast('配置已保存，将在下次连接时生效'); else toast('配置已保存');
+      }
+    }
+    closeDialog();
+  }
+  node.querySelector('[data-x="cancel"]').addEventListener('click', function () { closeDialog(); });
+  node.querySelector('[data-x="save"]').addEventListener('click', save);
+  node.querySelectorAll('input').forEach(function (inp) {
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+  });
+  openDialog(node);
+  if (focusPort) { portInput.focus(); try { portInput.select(); } catch (e) {} }
+  else { var h = q('hostname'); h.focus(); try { h.setSelectionRange(h.value.length, h.value.length); } catch (e) {} }
+}
+
+var quickEnabled = true;
+function runQuickTunnel() {
+  if (!quickEnabled) { toast('剪贴板快速新建已关闭（可在主菜单里打开）'); return; }
+  setTimeout(function () {
+    messageDialog({
+      heading: '是否要连接这个快速隧道？',
+      bodyHTML: '在剪贴板中发现了一个 Cloudflare 快速隧道链接：<br><br><code>https://' + esc(quickClipboardHost) + '</code>',
+      buttons: [{ label: '否', value: 'cancel' }, { label: '是', value: 'accept', style: 'suggested' }]
+    }).then(function (v) {
+      if (v !== 'accept') return;
+      openTunnelDialog({ name: quickName(new Date()), hostname: quickClipboardHost, port: 21128, listen: '127.0.0.1' }, true, true);
+    });
+  }, 260);
+}
+
+function mainMenuItems() {
+  return [
+    { label: '全部启动', fn: startAll },
+    { label: '全部停止', fn: stopAll },
+    { label: '剪贴板快速新建', checked: quickEnabled, fn: function () {
+        quickEnabled = !quickEnabled;
+        toast(quickEnabled ? '已开启：窗口获得焦点时检测剪贴板中的快速隧道链接' : '已关闭剪贴板快速新建');
+      } },
+    '-',
+    { label: '关于', fn: showAbout },
+    { label: '退出', fn: requestClose }
+  ];
+}
+function showAbout() {
+  var node = document.createElement('div');
+  node.className = 'dialog about-dialog';
+  node.innerHTML =
+    '<div class="dlg-titlebar">' +
+      '<span style="width:34px" aria-hidden="true"></span>' +
+      '<div class="t">关于</div><div style="flex:1"></div>' +
+      '<button class="tb-btn round" data-x="close" type="button" aria-label="关闭">' + icon('close') + '</button>' +
+    '</div>' +
+    '<div class="dlg-body">' +
+      '<div class="about-hero">' +
+        '<svg viewBox="0 0 128 128" aria-hidden="true"><use href="#i-app"></use></svg>' +
+        '<h4>Cloudflared 隧道管理器</h4>' +
+        '<div class="ver">版本 1.0.0 · Material 3 重构版</div>' +
+      '</div>' +
+      '<div class="about-comments">通过 Cloudflare Tunnel (cloudflared access) 管理多条任意 TCP 隧道连接，并内置 cloudflared 版本管理。</div>' +
+      '<div class="about-links">' +
+        '<a class="link-row" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop" target="_blank" rel="noopener">' +
+          icon('external') + '项目主页<span class="v">lingyicute/Cloudflared-Helper-Desktop</span></a>' +
+        '<a class="link-row" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/issues" target="_blank" rel="noopener">' +
+          icon('external') + '报告问题<span class="v">/issues</span></a>' +
+        '<div class="link-row">' + icon('code') + '开发者<span class="v">lingyicute</span></div>' +
+        '<div class="link-row">' + icon('shield') + '许可证<span class="v">AGPL-3.0</span></div>' +
+      '</div>' +
+      '<div class="about-foot">GTK4 · libadwaita · Python 3.10+ · Material 3 Expressive</div>' +
+    '</div>';
+  node.querySelector('[data-x="close"]').addEventListener('click', closeDialog);
+  openDialog(node);
+}
+function requestClose() {
+  var running = runningCount();
+  if (running === 0) { toast('演示：真实应用会在这里退出（预览窗口不会关闭）'); return; }
+  messageDialog({
+    heading: '退出并断开所有隧道？',
+    body: '仍有 ' + running + ' 个隧道处于连接状态，退出后将全部断开。',
+    buttons: [{ label: '取消', value: 'cancel' }, { label: '断开并退出', value: 'quit', style: 'destructive' }]
+  }).then(function (v) {
+    if (v !== 'quit') return;
+    stopAll();
+    setTimeout(function () { toast('演示：已断开全部隧道（真实应用会在这里退出）'); }, 700);
+  });
+}
+
+function switchPage(name) {
+  var isT = name === 'tunnels';
+  $('#pageTunnels').classList.toggle('active', isT);
+  $('#pageVersions').classList.toggle('active', !isT);
+  $('#tabTunnels').setAttribute('aria-selected', String(isT));
+  $('#tabVersions').setAttribute('aria-selected', String(!isT));
+  if (!isT) renderPrefs();
+}
+$('#tabTunnels').addEventListener('click', function () { switchPage('tunnels'); });
+$('#tabVersions').addEventListener('click', function () { switchPage('versions'); });
+$('#mockAdd').addEventListener('click', function () { openTunnelDialog(null, true, false); });
+$('#emptyAdd').addEventListener('click', function () { openTunnelDialog(null, true, false); });
+$('#mockMenuBtn').addEventListener('click', function () { openPopover(this, mainMenuItems()); });
+$('#mockClose').addEventListener('click', requestClose);
+$('#mockStartAll').addEventListener('click', startAll);
+$('#mockStopAll').addEventListener('click', stopAll);
+$('#demoQuick').addEventListener('click', runQuickTunnel);
+$('#demoReset').addEventListener('click', function () { resetDemo(); });
+
+tunnelList.addEventListener('click', function (e) {
+  var row = e.target.closest('.row'); if (!row) return;
+  var t = find(row.dataset.id); if (!t) return;
+  var hit = e.target.closest('[data-act]');
+  if (!hit) return;
+  var act = hit.dataset.act;
+  if (act === 'toggle') toggleTunnel(t.id);
+  else if (act === 'logs') openLogs(t.id);
+  else if (act === 'menu') {
+    openPopover(hit, [
+      { label: '编辑', fn: function () {
+          openTunnelDialog({ id: t.id, name: t.name, hostname: t.hostname, port: t.port, listen: t.listen, autostart: t.autostart }, false, false);
+        } },
+      { label: '复制为副本', fn: function () {
+          var c = tunnel(displayName(t) + ' (副本)', t.hostname, Math.min(65535, t.port + 1), { listen: t.listen });
+          tunnels.push(c); renderTunnels();
+        } },
+      { label: '复制命令行', fn: function () {
+          copyText(commandFor(t), { onDone: function (ok) { toast(ok ? '命令行已复制到剪贴板' : '浏览器没有放行剪贴板'); } });
+        } },
+      '-',
+      { label: '删除', fn: function () {
+          messageDialog({
+            heading: '删除「' + displayName(t) + '」？',
+            body: '如果该隧道正在运行，将会被立即断开。此操作不可撤销。',
+            buttons: [{ label: '取消', value: 'cancel' }, { label: '删除', value: 'delete', style: 'destructive' }]
+          }).then(function (v) {
+            if (v !== 'delete') return;
+            if (isActive(t)) pushLog(t, '[正在断开…]');
+            tunnels = tunnels.filter(function (x) { return x !== t; });
+            if (logTarget === t) { logWin.classList.remove('show'); logTarget = null; }
+            renderTunnels();
+          });
+        } }
+    ]);
+  }
+});
+$('#tunnelScroller').addEventListener('scroll', function () {
+  mock.classList.toggle('scrolled', this.scrollTop > 4);
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  if (popNode) { closePopover(); return; }
+  if (dialogOpen()) {
+    var hook = dialogCloseHook;
+    if (hook) hook();
+    closeDialog();
+    return;
+  }
+  if (logWin.classList.contains('show')) { logWin.classList.remove('show'); logTarget = null; }
+});
+document.addEventListener('click', function (e) {
+  if (popNode && !e.target.closest('.mock-popover')) closePopover();
+}, true);
+window.addEventListener('resize', function () { closePopover(); });
+
+var MOCK_W = 980, MOCK_H = 660, PAD = 60, INNER_W = MOCK_W + PAD * 2, INNER_H = MOCK_H + PAD * 2;
+function fitStage() {
+  var stage = $('#stage'), scroll = $('.stage-scroll', stage), inner = $('#stageInner');
+  var avail = scroll.clientWidth || stage.clientWidth;
+  var raw = avail / INNER_W;
+  var small = raw < 0.46;
+  var s = small ? 0.46 : Math.min(1, raw);
+  stage.classList.toggle('small', small);
+  inner.style.transform = 'scale(' + s + ')';
+  inner.style.left = (small ? 0 : Math.max(0, Math.round((avail - INNER_W * s) / 2))) + 'px';
+  stage.style.height = Math.round(INNER_H * s + (small ? 16 : 0)) + 'px';
+}
+
+function resetDemo() {
+  Object.keys(downloads).forEach(function (k) { delete downloads[k]; });
+  quickEnabled = true;
+  V.activePolicy = 'latest-installed';
+  V.installed = ['2026.9.0', '2026.8.3'];
+  seedData();
+  switchPage('tunnels');
+  logWin.classList.remove('show'); logTarget = null;
+  closeDialog();
+  renderTunnels();
+  $('#tunnelScroller').scrollTop = 0;
+  toast('演示已重置');
+}
+var STREAM = [
+  ' INF Reuse existing connection connIndex=0',
+  ' INF Connection registered connIndex=0 location=HKG',
+  ' WRN Failed to dial to edge with quic: timeout (retrying with http2)',
+  ' INF Connection retry: 1 attempt(s)'
+];
+setInterval(function () {
+  tunnels.forEach(function (t) {
+    if (!isActive(t)) return;
+    if (Math.random() < 0.28) pushLog(t, iso(new Date()) + STREAM[Math.floor(Math.random() * STREAM.length)]);
+  });
+}, 2600);
+
+var topbar = $('#topbar');
+window.addEventListener('scroll', function () {
+  topbar.classList.toggle('scrolled', window.scrollY > 8);
+}, { passive: true });
+$('#navToggle').addEventListener('click', function () {
+  var open = $('#nav').classList.toggle('open');
+  this.setAttribute('aria-expanded', String(open));
+});
+$$('#nav a').forEach(function (a) {
+  a.addEventListener('click', function () { $('#nav').classList.remove('open'); $('#navToggle').setAttribute('aria-expanded', 'false'); });
+});
+$('#themeBtn').addEventListener('click', function () {
+  theme.dark = !theme.dark;
+  store.set('cftm-theme', theme.dark ? 'dark' : 'light');
+  applyTheme(true);
+  snack(theme.dark ? '已切换到深色主题（应用窗口跟随）' : '已切换到浅色主题（应用窗口跟随）');
+  fitStage();
+});
+$$('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    copyText(b.dataset.copy, { msg: '命令已复制到剪贴板' });
+    b.innerHTML = icon('check', 'ic');
+    setTimeout(function () { b.innerHTML = icon('copy', 'ic'); }, 1400);
+  });
+});
+var io = ('IntersectionObserver' in window) ? new IntersectionObserver(function (entries) {
+  entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+}, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 }) : null;
+if (io) $$('.reveal').forEach(function (n) { io.observe(n); });
+else $$('.reveal').forEach(function (n) { n.classList.add('in'); });
+theme.dark = store.get('cftm-theme') ? store.get('cftm-theme') === 'dark'
+  : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+theme.seed = store.get('cftm-seed') || SEEDS[0].hex;
+applyTheme(false);
+seedData();
+renderTunnels();
+switchPage('tunnels');
+fitStage();
+if ('ResizeObserver' in window) new ResizeObserver(function () { fitStage(); }).observe($('#stage'));
+window.addEventListener('resize', fitStage);
+window.addEventListener('load', fitStage);
+setTimeout(fitStage, 120);
+
+/* ---- 页面级增强：导航滚动高亮 / 回到顶部 / 跟随系统深浅色 ---- */
+var navLinks = $$('#nav a');
+if ('IntersectionObserver' in window && navLinks.length) {
+  var spySections = navLinks.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  var spy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      var id = '#' + en.target.id;
+      navLinks.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === id); });
+    });
+  }, { rootMargin: '-35% 0px -60% 0px', threshold: 0 });
+  spySections.forEach(function (s) { spy.observe(s); });
+}
+var fab = $('#backTop');
+if (fab) {
+  var onFabScroll = function () { fab.classList.toggle('show', window.scrollY > 640); };
+  window.addEventListener('scroll', onFabScroll, { passive: true });
+  onFabScroll();
+  fab.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+}
+if (window.matchMedia) {
+  var mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+  var followSystem = function (e) {
+    var stored = null;
+    try { stored = localStorage.getItem('cftm-theme'); } catch (err) {}
+    if (!stored && e.matches !== theme.dark) { theme.dark = e.matches; applyTheme(true); fitStage(); }
+  };
+  if (mqDark.addEventListener) mqDark.addEventListener('change', followSystem);
+  else if (mqDark.addListener) mqDark.addListener(followSystem);
+}
+})();
+</script>
+<script>
+</body>
+</html>
