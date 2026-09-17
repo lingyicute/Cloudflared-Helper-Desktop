@@ -1,5 +1,5 @@
 # Cloudflared-Helper-Desktop
-## Cloudflared 隧道管理器
+## Cloudflared 隧道管理器 · Made with ❤️ by lingyicute
 
 一个基于 **Python + GTK4 + libadwaita** 的现代化桌面应用，用于管理多条 [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/) 客户端连接。[Cloudflared-Helper](https://github.com/lingyicute/Cloudflared-Helper) 的 GUI 继任者。
 
