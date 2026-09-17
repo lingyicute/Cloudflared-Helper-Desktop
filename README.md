@@ -21,7 +21,7 @@
 [别名](https://github.com/cloudflare/cloudflared/blob/master/cmd/cloudflared/access/cmd.go)：四个子命令共用同一个 Action 和同一组 flag，源码中没有任何地方读取子命令名；`ssh://`、`rdp://`、`smb://` 这类 scheme
 也只用来推导缺省的 `--url`，对转发行为没有任何影响。
 
-因此本应用不设置「协议类型」，统一执行：
+因此本应用没有「协议类型」设置，统一执行：
 
 ```bash
 cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口>
