@@ -37,7 +37,7 @@ jobs:
           COMMIT_NAME: ${{ github.actor }}
           COMMIT_EMAIL: ${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.actor) }}
         run: |
-          git add index.html static/fonts/nebulove-subset.woff2 scripts/.font-subset-cache.json
+          git add index.html static/fonts/nebulove-subset.woff2 scripts/font-subset-cache.json
           if git diff --cached --quiet; then
             echo "No font changes detected."
             exit 0
