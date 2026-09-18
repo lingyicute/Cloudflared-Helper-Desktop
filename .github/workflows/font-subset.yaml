@@ -1,0 +1,48 @@
+name: Font Subsetting
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "index.html"
+      - "static/fonts/**"
+      - "scripts/subset_font.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  subset-fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install maintenance dependencies
+        run: python -m pip install fonttools brotli
+
+      - name: Generate cacheable font subsets
+        run: python scripts/subset_font.py
+
+      - name: Commit font updates
+        env:
+          COMMIT_NAME: ${{ github.actor }}
+          COMMIT_EMAIL: ${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.actor) }}
+        run: |
+          git add index.html static/fonts/nebulove-subset.woff2 scripts/.font-subset-cache.json
+          if git diff --cached --quiet; then
+            echo "No font changes detected."
+            exit 0
+          fi
+          git config user.name "$COMMIT_NAME"
+          git config user.email "$COMMIT_EMAIL"
+          git commit -m "perf: 更新字体子集"
+          git push
