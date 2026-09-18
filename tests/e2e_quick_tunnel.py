@@ -316,7 +316,7 @@ class TestApp(Application):
     def s12_disable(self):
         print("[10] 关掉功能开关后再次切换焦点 —— 不应弹窗")
         action = self.win.lookup_action("clipboard-quick-tunnel")
-        check(action is not None, "菜单里存在“剪贴板快速新建”开关")
+        check(action is not None, "菜单里存在“剪贴板快速连接”开关")
         if action:
             action.change_state(GLib.Variant.new_boolean(False))
             check(self.config.get("clipboard_quick_tunnel") is False, "关闭状态已写入配置")
