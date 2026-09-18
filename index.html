@@ -28,11 +28,16 @@
 })();
 </script>
 <style>
+@font-face{
+  font-family: "Nebulove";
+  src: url("scripts/nebulove-subset.woff2") format("woff2");
+  font-display: swap;
+}
 
 :root{
   /* Typeface */
-  --md-ref-typeface-brand: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --md-ref-typeface-plain: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --md-ref-typeface-brand: "Nebulove", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --md-ref-typeface-plain: "Nebulove", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --md-ref-typeface-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* Shape scale */
@@ -893,6 +898,9 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
 .foot-brand .b span{font-family:var(--md-ref-typeface-brand); font-size:20px; line-height:28px; color:var(--md-sys-color-on-surface)}
 .foot-brand p{font-size:14px; color:var(--md-sys-color-on-surface-variant); line-height:22px; letter-spacing:.25px}
 .foot-brand p .heart{color:var(--md-sys-color-primary)}
+/* 实心爱心图标：替换 U+2764 字符，避免各平台默认字体的字形参差 */
+.heart{display:inline-flex; vertical-align:-.18em}
+.heart .ic{width:1em; height:1em; flex:none}
 .foot-tags{display:flex; gap:8px; flex-wrap:wrap}
 .foot-col h4{font-size:14px; font-weight:500; line-height:20px; letter-spacing:.1px; margin-bottom:10px; color:var(--md-sys-color-on-surface)}
 .foot-col a{
@@ -1061,6 +1069,7 @@ html.js .reveal.in{opacity:1; transform:none}
   <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.8v4.9"/><circle cx="12" cy="16.2" r=".95" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="5.6" r="2.6"/><circle cx="5.8" cy="18" r="2.6"/><circle cx="18.2" cy="18" r="2.6"/><path d="M10.7 7.9 7 15.6M13.3 7.9 17 15.6M8.4 18h7.2"/></symbol>
   <symbol id="i-update" viewBox="0 0 24 24"><path d="M20.4 12a8.4 8.4 0 1 0-8.4 8.4"/><path d="M12 16.4V8.2m-3 3 3-3 3 3"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol>
   <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.6 14.4A8.9 8.9 0 0 1 9.6 3.4a8.9 8.9 0 1 0 11 11z"/></symbol>
@@ -1112,7 +1121,7 @@ html.js .reveal.in{opacity:1; transform:none}
   <div class="hero-bg" aria-hidden="true"></div>
   <div class="shell hero-grid">
     <div class="hero-copy reveal">
-      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"></use></svg>AGPL-3.0 · Made with ❤ by lingyicute</span>
+      <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-sparkle"></use></svg><span>AGPL-3.0 · Made with <span class="heart"><svg class="ic" aria-hidden="true"><use href="#i-heart"></use></svg></span> by lingyicute</span></span>
       <h1 class="hero-title" id="t-hero">多条 Cloudflare Tunnel，<br><strong>一个现代化桌面窗口搞定。</strong></h1>
       <p class="hero-sub">
         基于 Python + GTK4 的现代化桌面应用：保存任意数量的 cloudflared access 隧道，多条同时运行，每条都有独立的状态灯、启停按钮与实时日志。<br>
@@ -1508,7 +1517,7 @@ tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
           <svg viewBox="0 0 128 128" aria-hidden="true"><use href="#i-app"></use></svg>
           <span>Cloudflared 隧道管理器</span>
         </div>
-        <p>Cloudflared-Helper 的 GUI 继任者：管理多条 Cloudflare Tunnel（cloudflared access）连接，并内置 cloudflared 版本管理。Made with <span class="heart">❤</span> by lingyicute.</p>
+        <p>Cloudflared-Helper 的 GUI 继任者：管理多条 Cloudflare Tunnel（cloudflared access）连接，并内置 cloudflared 版本管理。Made with <span class="heart"><svg class="ic" aria-hidden="true"><use href="#i-heart"></use></svg></span> by lingyicute.</p>
         <div class="foot-tags">
           <span class="tag">Python</span><span class="tag">GTK4</span><span class="tag">libadwaita</span><span class="tag">AGPL-3.0</span>
         </div>
@@ -1537,7 +1546,7 @@ tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
     </div>
     <div class="foot-bottom">
       <span>Copyright © 2024–2026 lingyicute · 以 AGPL-3.0 授权发布</span>
-      <span>This website proudly features Material You design. ❤</span>
+      <span>This website proudly features Material You design. <span class="heart"><svg class="ic" aria-hidden="true"><use href="#i-heart"></use></svg></span></span>
     </div>
   </div>
 </footer>
