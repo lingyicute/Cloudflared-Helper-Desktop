@@ -73,9 +73,9 @@ class TunnelDialog(Adw.Window):
     """新建 / 编辑隧道。
 
     :param is_new: 显式声明这是“新建”还是“编辑”。默认按 ``config is None`` 推断；
-        从剪贴板快速新建时会传入一个已经填好主机名和名称的 ``TunnelConfig``，
+        从剪贴板快速连接时会传入一个已经填好主机名和名称的 ``TunnelConfig``，
         此时必须显式传 ``is_new=True``，否则标题会变成“编辑隧道”。
-    :param focus_port: 把初始焦点放在端口上（并选中默认值）。快速新建时其余字段都
+    :param focus_port: 把初始焦点放在端口上（并选中默认值）。快速连接时其余字段都
         已填好，用户只需要输一个端口号。
     """
 
@@ -160,7 +160,7 @@ class TunnelDialog(Adw.Window):
     def _wire_enter_to_save(self, save: Gtk.Button) -> None:
         """让回车等于“保存”。
 
-        快速新建时用户输完端口号直接回车就行，不用再去够鼠标。所有输入行都是单行
+        快速连接时用户输完端口号直接回车就行，不用再去够鼠标。所有输入行都是单行
         控件，回车没有别的用途。
         """
         try:

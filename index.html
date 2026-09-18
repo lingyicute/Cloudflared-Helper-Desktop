@@ -6,11 +6,25 @@
 <title>Cloudflared Helper Desktop — 多条 Cloudflare 隧道，一个窗口搞定</title>
 <meta name="description" content="基于 Python 和 GTK4 的现代化桌面应用：保存任意数量的 cloudflared access 隧道，多条同时连接，一键切换 cloudflared 版本，剪贴板快速连接。">
 <meta property="og:title" content="Cloudflared Helper Desktop — 多条 Cloudflare 隧道，一个窗口搞定">
-<meta property="og:description" content="GTK4 / libadwaita 桌面应用：多隧道并发、剪贴板快速新建、cloudflared 版本管理。">
+<meta property="og:description" content="GTK4 / libadwaita 桌面应用：多隧道并发、剪贴板快速连接、cloudflared 版本管理。">
 <meta property="og:type" content="website">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:site_name" content="Cloudflared Helper Desktop">
+<link rel="canonical" href="https://lingyicute.github.io/Cloudflared-Helper-Desktop/">
+<meta property="og:url" content="https://lingyicute.github.io/Cloudflared-Helper-Desktop/">
+<meta property="og:image" content="https://lingyicute.github.io/Cloudflared-Helper-Desktop/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cloudflared Helper Desktop · 隧道管理器">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f1eeed">
+<meta name="theme-color" content="#f1eeed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14100e" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3C?xml%20version=%221.0%22%20encoding=%22UTF-8%22?%3E%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22128%22%20height=%22128%22%20viewBox=%220%200%20128%20128%22%3E%3Cdefs%3E%3ClinearGradient%20id=%22bg%22%20x1=%220%22%20y1=%220%22%20x2=%221%22%20y2=%221%22%3E%3Cstop%20offset=%220%22%20stop-color=%22#ff9a3c%22/%3E%3Cstop%20offset=%221%22%20stop-color=%22#f26522%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20x=%228%22%20y=%228%22%20width=%22112%22%20height=%22112%22%20rx=%2238.158%22%20fill=%22url(#bg)%22%20ry=%2238.158%22/%3E%3Cpath%20d=%22M%2043.685%2071.387%20C%2035.462%2069.996%2031.829%2060.226%2037.144%2053.8%20C%2039.144%2051.382%2042.095%2049.951%2045.232%2049.876%20C%2047.664%2036.998%2063.123%2031.582%2073.059%2040.126%20C%2075.111%2041.89%2076.713%2044.118%2077.732%2046.626%20C%2087.262%2044.839%2095.154%2054.039%2091.936%2063.186%20C%2090.442%2067.432%2086.798%2070.558%2082.375%2071.387%20L%2043.685%2071.387%20Z%22%20fill=%22#fff%22%20opacity=%22.95%22%20style=%22%22/%3E%3Cpath%20d=%22M%2033.381%2085.205%20L%2093.974%2085.205%22%20stroke=%22#fff%22%20stroke-width=%226%22%20stroke-linecap=%22round%22%20opacity=%22.85%22%20style=%22%22/%3E%3Ccircle%20cx=%2243.48%22%20cy=%2285.205%22%20r=%224.208%22%20fill=%22#2ec27e%22%20style=%22%22/%3E%3Ccircle%20cx=%2263.677%22%20cy=%2285.205%22%20r=%224.208%22%20fill=%22#2ec27e%22%20style=%22%22/%3E%3Ccircle%20cx=%2283.875%22%20cy=%2285.205%22%20r=%224.208%22%20fill=%22#2ec27e%22%20style=%22%22/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="assets/favicon.ico">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <script>
 /* 提前应用持久化/系统主题，避免首帧闪烁 */
 (function () {
@@ -21,13 +35,12 @@
   } catch (e) {}
 })();
 </script>
-<noscript><style>.reveal{opacity:1 !important; transform:none !important}</style></noscript>
 <style>
 
 :root{
   /* Typeface */
-  --md-ref-typeface-brand: "Google Sans", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --md-ref-typeface-plain: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --md-ref-typeface-brand: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --md-ref-typeface-plain: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "Source Han Sans SC", "HarmonyOS Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --md-ref-typeface-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* Shape scale */
@@ -185,6 +198,18 @@ input,textarea,select{font:inherit; color:inherit}
 :focus-visible{outline:3px solid var(--md-sys-color-primary); outline-offset:2px}
 ::selection{background:color-mix(in srgb, var(--md-sys-color-primary) 26%, transparent)}
 
+/* 跳过导航链接：平时藏在视口外，键盘聚焦时滑入 */
+.skip-link{position:absolute; left:16px; top:-56px; z-index:300; height:40px; padding:0 20px; display:inline-flex; align-items:center; border-radius:var(--md-sys-shape-corner-full); background:var(--md-sys-color-primary); color:var(--md-sys-color-on-primary); font-size:14px; font-weight:500; letter-spacing:.1px; transition:top var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized)}
+.skip-link:focus-visible{top:12px}
+@media print{
+  .topbar,.fab,.snack-host,.demo-toolbar,.mock-hint-small,.hero-cta,.cta-band .actions,.code-block .cp{display:none !important}
+  .reveal,html.js .reveal{opacity:1 !important; transform:none !important}
+  body{background:#fff; color:#000}
+  .band--tint{background:#f5f5f5}
+  .stage{box-shadow:none}
+  a{color:#000; text-decoration:underline}
+}
+
 /* Icon helpers */
 .ic{width:24px; height:24px; flex:none; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round}
 .ic.fill{fill:currentColor; stroke:none}
@@ -221,6 +246,16 @@ code.mono{
 .body-medium{font-size:14px; line-height:20px; font-weight:400; letter-spacing:.25px}
 .body-small{font-size:12px; line-height:16px; font-weight:400; letter-spacing:.4px}
 
+/* 中文排印修正：M3 的英文 tracking 不适合汉字，中文环境下正文不加字距 */
+html[lang^="zh"] .body-large,html[lang^="zh"] .body-medium,html[lang^="zh"] .body-small,
+html[lang^="zh"] .hero-sub,html[lang^="zh"] .sec-sub,
+html[lang^="zh"] .feat p,html[lang^="zh"] .step p,
+html[lang^="zh"] .faq .ans,html[lang^="zh"] .faq-q,
+html[lang^="zh"] .dl-desc,html[lang^="zh"] .cta-band p,
+html[lang^="zh"] .foot-brand p,html[lang^="zh"] .foot-bottom,
+html[lang^="zh"] .tag,html[lang^="zh"] .dl-card .sub,
+html[lang^="zh"] .hero-note,html[lang^="zh"] .dt-hint{letter-spacing:0}
+
 /* --------------------------------------------------------------------------
    4. Layout primitives
    -------------------------------------------------------------------------- */
@@ -228,7 +263,6 @@ code.mono{
 section{scroll-margin-top:88px}
 .band{padding-block:var(--sec-y)}
 .band--tint{background:var(--md-sys-color-surface-container-low)}
-.band--deep{background:var(--md-sys-color-surface-container)}
 
 .sec-head{max-width:800px; margin-bottom:clamp(36px,5vw,60px); display:flex; flex-direction:column; gap:18px; align-items:flex-start}
 .sec-head.center{margin-inline:auto; align-items:center; text-align:center}
@@ -243,7 +277,6 @@ section{scroll-margin-top:88px}
   font-size:14px; font-weight:500; letter-spacing:.1px; line-height:20px;
 }
 .eyebrow .ic{width:18px;height:18px}
-.eyebrow--tert{background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container)}
 
 /* --------------------------------------------------------------------------
    5. M3 Buttons（40dp 基准；state layer 8%/10%/12%）
@@ -267,10 +300,7 @@ section{scroll-margin-top:88px}
 .m3-btn.filled:hover{box-shadow:var(--md-sys-elevation-level1)}
 .m3-btn.tonal{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
 .m3-btn.tonal:hover{box-shadow:var(--md-sys-elevation-level1)}
-.m3-btn.elevated{background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-primary); box-shadow:var(--md-sys-elevation-level1)}
-.m3-btn.elevated:hover{box-shadow:var(--md-sys-elevation-level2)}
 .m3-btn.outlined{border:1px solid var(--md-sys-color-outline); color:var(--md-sys-color-primary); background:transparent}
-.m3-btn.text{color:var(--md-sys-color-primary); padding:0 16px}
 .m3-btn.large{height:52px; padding:0 28px; font-size:15px; gap:10px}
 .m3-btn.large .ic{width:20px;height:20px}
 .m3-btn[disabled],.m3-btn[aria-disabled="true"]{opacity:.45; pointer-events:none}
@@ -309,8 +339,6 @@ section{scroll-margin-top:88px}
 .m3-chip:hover::after{opacity:.08}
 .m3-chip .ic{width:18px;height:18px}
 .m3-chip.suggestion{border-color:transparent; background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface)}
-.m3-chip.selected{border-color:transparent; background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
-button.m3-chip{cursor:pointer}
 
 /* --------------------------------------------------------------------------
    7. M3 Code block（inverse surface 容器）
@@ -324,11 +352,23 @@ button.m3-chip{cursor:pointer}
 .code-block .cmt{color:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 58%, transparent)}
 .code-block .cp{
   position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:10px;
+  background:var(--md-sys-color-inverse-surface);
+  box-shadow:0 1px 4px rgba(0,0,0,.25);
   display:grid; place-items:center; color:var(--md-sys-color-inverse-on-surface);
   transition:background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
 .code-block .cp:hover{background:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 12%, transparent)}
 .code-block .cp:active{background:color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 16%, transparent)}
+/* 深色模式下代码块改用深色容器，而不是反色（浅色）大块 */
+html[data-theme="dark"] .code-block{
+  background:var(--md-sys-color-surface-container-highest);
+  color:var(--md-sys-color-on-surface);
+  border-color:var(--md-sys-color-outline-variant);
+}
+html[data-theme="dark"] .code-block .cmt{color:var(--md-sys-color-on-surface-variant)}
+html[data-theme="dark"] .code-block .cp{color:var(--md-sys-color-on-surface-variant); background:var(--md-sys-color-surface-container-highest)}
+html[data-theme="dark"] .code-block .cp:hover{background:color-mix(in srgb, var(--md-sys-color-on-surface) 10%, transparent)}
+html[data-theme="dark"] .code-block .cp:active{background:color-mix(in srgb, var(--md-sys-color-on-surface) 14%, transparent)}
 .code-block .cp .ic{width:18px;height:18px}
 
 /* --------------------------------------------------------------------------
@@ -387,7 +427,6 @@ button.m3-chip{cursor:pointer}
 .gh-btn:hover::after{opacity:.08}
 .gh-btn:hover{box-shadow:var(--md-sys-elevation-level1)}
 .gh-btn .ic{width:18px;height:18px}
-.nav-toggle{display:none}
 
 /* --------------------------------------------------------------------------
    9. Hero（M3 Expressive：display 大字 + 色块 + 图标悬浮件）
@@ -414,13 +453,13 @@ button.m3-chip{cursor:pointer}
 }
 .hero-title strong{font-weight:500; color:var(--md-sys-color-primary); letter-spacing:-.03em}
 .hero-sub{font-size:clamp(16px,1.7vw,18px); line-height:1.75; color:var(--md-sys-color-on-surface-variant); max-width:60ch; font-weight:400; letter-spacing:.15px}
-.hero-sub .mono{font-family:var(--md-ref-typeface-mono); font-size:.9em; background:var(--md-sys-color-surface-container-high); color:var(--md-sys-color-on-surface); padding:2px 8px; border-radius:6px; font-weight:500}
 .hero-sub mark{background:linear-gradient(transparent 62%, color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent) 62%); color:inherit; padding:0 2px; font-weight:500}
 
 .hero-cta{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
 .hero-chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:2px}
 .hero-note{font-size:13px; line-height:20px; color:var(--md-sys-color-on-surface-variant); display:flex; align-items:center; gap:8px; font-weight:400; letter-spacing:.25px}
 .hero-note .ic{width:16px;height:16px; color:var(--md-sys-color-primary)}
+a.hero-note:hover{color:var(--md-sys-color-on-surface); text-decoration:underline; text-underline-offset:3px}
 
 .hero-visual{position:relative; display:flex; justify-content:center; align-items:center}
 .appicon-wrap{position:relative; width:min(340px,64vw); aspect-ratio:1; display:grid; place-items:center}
@@ -446,38 +485,9 @@ button.m3-chip{cursor:pointer}
 .oc3{top:56%; left:-12%; animation:float 9.5s ease-in-out infinite 1.2s}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 
-/* --------------------------------------------------------------------------
-   10. Stats（elevated card + 内嵌分隔线）
-   -------------------------------------------------------------------------- */
-.stats{
-  position:relative; z-index:1;
-  display:grid; grid-template-columns:repeat(4,1fr);
-  background:var(--md-sys-color-surface-container-low);
-  border-radius:var(--md-sys-shape-corner-extra-large);
-  box-shadow:var(--md-sys-elevation-level1);
-  overflow:hidden; margin-top:clamp(44px,6vw,72px);
-}
-.stat{
-  padding:24px 26px 22px; display:flex; align-items:flex-start; gap:14px;
-  transition:background-color var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
-}
-.stat + .stat{border-left:1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 62%, transparent)}
-.stat:hover{background:var(--md-sys-color-surface-container)}
-.stat-ic{
-  width:44px; height:44px; border-radius:var(--md-sys-shape-corner-full); flex:none;
-  display:grid; place-items:center;
-  background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container);
-}
-.stat:nth-child(2) .stat-ic{background:var(--md-sys-color-tertiary-container); color:var(--md-sys-color-on-tertiary-container)}
-.stat:nth-child(3) .stat-ic{background:var(--md-sys-color-primary-container); color:var(--md-sys-color-on-primary-container)}
-.stat:nth-child(4) .stat-ic{background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container)}
-.stat-ic .ic{width:22px;height:22px}
-.stat-txt{display:flex; flex-direction:column; gap:2px; min-width:0}
-.stat-txt b{font-family:var(--md-ref-typeface-brand); font-size:27px; font-weight:400; line-height:1.2; color:var(--md-sys-color-on-surface); font-variant-numeric:tabular-nums; letter-spacing:0}
-.stat-txt span{font-size:13px; line-height:19px; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
 
 /* --------------------------------------------------------------------------
-   11. Preview 区：分区标题 / 演示工具条 / 舞台
+   10. Preview 区：分区标题 / 演示工具条 / 舞台
    -------------------------------------------------------------------------- */
 .demo-toolbar{
   display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px;
@@ -489,23 +499,9 @@ button.m3-chip{cursor:pointer}
 .dt-hint .ic{width:20px;height:20px;color:var(--md-sys-color-primary)}
 .dt-hint b{color:var(--md-sys-color-on-surface); font-weight:600}
 .dt-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-.dt-sep{width:1px; height:28px; background:var(--md-sys-color-outline-variant); margin-inline:4px}
-.seed-label{display:flex; align-items:center; gap:6px; font-size:13px; font-weight:500; color:var(--md-sys-color-on-surface-variant); letter-spacing:.25px}
-.seed-label .ic{width:18px;height:18px}
-.seed-dots{display:flex; align-items:center; gap:8px}
-.seed{
-  width:30px; height:30px; border-radius:50%; border:2px solid transparent;
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.45), 0 1px 3px rgba(0,0,0,.18);
-  transition:transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-spring),
-             box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
-  position:relative; cursor:pointer;
-}
-.seed:hover{transform:scale(1.1)}
-.seed:active{transform:scale(.96)}
-.seed[aria-pressed="true"]{box-shadow:0 0 0 2px var(--md-sys-color-surface-container-high), 0 0 0 4px currentColor, 0 2px 6px rgba(0,0,0,.2)}
 
 /* ==========================================================================
-   12. GTK/libadwaita 界面复刻（保持原实现的独立取色体系）
+   11. GTK/libadwaita 界面复刻（mock 专用变量，不属于 M3 层）
    ========================================================================== */
 .stage{position:relative; width:100%; background:var(--md-sys-color-surface-container-lowest); border-radius:var(--md-sys-shape-corner-extra-large); padding:16px; border:1px solid var(--md-sys-color-outline-variant); box-shadow:var(--md-sys-elevation-level1)}
 .stage-scroll{position:relative; width:100%; height:100%; overflow:hidden; border-radius:var(--md-sys-shape-corner-large)}
@@ -513,10 +509,15 @@ button.m3-chip{cursor:pointer}
 .stage.small .stage-scroll{overflow-x:auto; overflow-y:hidden}
 .mock-hint-small{display:none; font-size:13px; color:var(--md-sys-color-on-surface-variant); align-items:center; gap:8px; margin-top:12px; justify-content:center; font-weight:500}
 .stage.small ~ .mock-hint-small{display:flex}
+/* 无 JS：藏起整个演示骨架，只留提示条 */
+html:not(.js) .stage,html:not(.js) .demo-toolbar{display:none}
+.nojs-note{display:flex; align-items:center; gap:12px; max-width:720px; margin:6px auto 0;
+  padding:16px 20px; border-radius:var(--md-sys-shape-corner-large);
+  background:var(--md-sys-color-surface-container-low); color:var(--md-sys-color-on-surface-variant);
+  border:1px solid var(--md-sys-color-outline-variant); font-size:14.5px; line-height:1.6}
+.nojs-note .ic{flex:none; color:var(--md-sys-color-primary)}
 
-/* ==========================================================================
-   Mock - Keep excellent GTK reproduction
-   ========================================================================== */
+/* Mock 界面：GTK4 / libadwaita 高保真复刻 */
 .mock{
   position:relative; width:980px; height:660px;
   background:var(--adw-bg); border-radius:12px; box-shadow:var(--adw-shadow);
@@ -610,8 +611,6 @@ html[data-theme="dark"] .pref-box{box-shadow:none}
 .pref-row .lead-ic{width:16px;height:16px;color:var(--adw-dim);flex:none}
 .pref-row.warn{color:var(--adw-warning)}
 .pref-row.warn .lead-ic{color:var(--adw-warning)}
-.pref-row.err{color:#e01b24}
-.pref-row.err .lead-ic{color:#e01b24}
 .radio{width:18px;height:18px;border-radius:50%;flex:none;border:1.6px solid var(--adw-dim); display:grid; place-items:center; transition:border-color .15s ease, background-color .15s ease}
 .radio::after{content:""; width:8px;height:8px;border-radius:50%; background:transparent; transition:background-color .15s ease}
 .pref-row[aria-checked="true"] .radio{border-color:var(--adw-accent); border-width:5px; background:var(--adw-accent)}
@@ -706,7 +705,7 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
 
 
 /* --------------------------------------------------------------------------
-   13. Feature cards（filled card on surface；图标容器 hover 形变）
+   12. Feature cards（filled card on surface；图标容器 hover 形变）
    -------------------------------------------------------------------------- */
 .grid-3{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(310px,1fr))}
 .grid-2{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
@@ -741,7 +740,7 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
 }
 
 /* --------------------------------------------------------------------------
-   14. Steps（快速开始）
+   13. Steps（快速开始）
    -------------------------------------------------------------------------- */
 .steps{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
 .step{
@@ -768,6 +767,8 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
   overflow-x:auto; white-space:nowrap;
 }
 .step .cmd b{color:var(--md-sys-color-inverse-primary); font-weight:600}
+html[data-theme="dark"] .step .cmd{background:var(--md-sys-color-surface-container-highest); color:var(--md-sys-color-on-surface)}
+html[data-theme="dark"] .step .cmd b{color:var(--md-sys-color-primary)}
 .step .kbd{
   display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 8px;
   border-radius:6px; background:var(--md-sys-color-surface-container-high);
@@ -777,7 +778,7 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
 }
 
 /* --------------------------------------------------------------------------
-   15. FAQ（expanded 卡片）
+   14. FAQ（expanded 卡片）
    -------------------------------------------------------------------------- */
 .faq-list{display:flex; flex-direction:column; gap:12px; max-width:880px; margin-inline:auto; width:100%}
 .faq{
@@ -815,7 +816,7 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
 .faq .ans li::before{content:""; position:absolute; left:4px; top:.55em; width:6px; height:6px; border-radius:50%; background:var(--md-sys-color-primary)}
 
 /* --------------------------------------------------------------------------
-   16. Download cards
+   15. Download cards
    -------------------------------------------------------------------------- */
 .dl-card{
   position:relative; background:var(--md-sys-color-surface-container-lowest);
@@ -865,7 +866,7 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
 .dl-card.featured .dl-item .ic{color:var(--md-sys-color-on-primary-container)}
 
 /* --------------------------------------------------------------------------
-   17. CTA band（M3 Expressive 面板 + 几何装饰）
+   16. CTA band（M3 Expressive 面板 + 几何装饰）
    -------------------------------------------------------------------------- */
 .cta-band{
   position:relative; overflow:hidden;
@@ -890,7 +891,7 @@ html[data-theme="dark"] .toast{background:#3a3a3a; box-shadow:0 6px 22px rgba(0,
 .cta-band .m3-btn.outlined{border-color:color-mix(in srgb, var(--md-sys-color-on-primary-container) 55%, transparent); color:var(--md-sys-color-on-primary-container)}
 
 /* --------------------------------------------------------------------------
-   18. Footer
+   17. Footer
    -------------------------------------------------------------------------- */
 footer.site{background:var(--md-sys-color-surface-container); padding-block:clamp(48px,6vw,72px) 32px}
 .foot-grid{display:grid; gap:40px 32px; grid-template-columns:minmax(0,1.45fr) repeat(auto-fit,minmax(170px,1fr))}
@@ -914,7 +915,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
 }
 
 /* --------------------------------------------------------------------------
-   19. Snackbar / FAB
+   18. Snackbar / FAB
    -------------------------------------------------------------------------- */
 .snack-host{
   position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:200;
@@ -956,57 +957,86 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
 .fab .ic{transform:rotate(180deg)}
 
 /* --------------------------------------------------------------------------
-   20. Reveal & motion
+   19. Reveal & motion
    -------------------------------------------------------------------------- */
-.reveal{opacity:0; transform:translateY(24px); transition:opacity 480ms var(--md-sys-motion-easing-standard), transform 520ms var(--md-sys-motion-easing-emphasized)}
-.reveal.in{opacity:1; transform:none}
+/* 渐进增强：平时内容直接可见；只有主脚本成功运行（加上 html.js）后才启用滚动显现。
+   否则一旦脚本加载失败，整页 .reveal 都会保持 opacity:0 全黑。 */
+.reveal{opacity:1; transform:none; transition:opacity 480ms var(--md-sys-motion-easing-standard), transform 520ms var(--md-sys-motion-easing-emphasized)}
+html.js .reveal{opacity:0; transform:translateY(24px)}
+html.js .reveal.in{opacity:1; transform:none}
 .reveal.d1{transition-delay:70ms}
 .reveal.d2{transition-delay:140ms}
 .reveal.d3{transition-delay:210ms}
-.reveal.d4{transition-delay:280ms}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
-  .reveal{opacity:1; transform:none}
+  .reveal,html.js .reveal{opacity:1 !important; transform:none !important}
   html{scroll-behavior:auto}
 }
 
 /* --------------------------------------------------------------------------
-   21. Responsive
+   20. Responsive
    -------------------------------------------------------------------------- */
 @media (max-width:1100px){
   .hero-grid{grid-template-columns:1fr; gap:44px}
   .hero-visual{order:-1}
-  .nav{display:none}
-  .nav.open{display:none}
   .appicon-wrap{width:min(280px,58vw)}
-  .stats{grid-template-columns:1fr 1fr}
-  .stat:nth-child(odd){border-left:0}
-  .stat:nth-child(n+3){border-top:1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 62%, transparent)}
+  /* 窄屏隐藏顶部导航，靠滚动翻阅；右侧按钮组保持贴右 */
+  .nav{display:none}
+  .topbar-actions{margin-left:auto}
+  /* 页脚：品牌区独占一行，链接列另起一行，避免品牌列被 170px 列挤扁 */
+  .foot-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+  .foot-brand{grid-column:1/-1; max-width:640px}
 }
 @media (max-width:860px){
-  .nav{display:none}
-  .nav.open{display:none}
-  .nav.open a{height:48px}
-  .nav.open a.active{background:var(--md-sys-color-secondary-container)}
-  .nav-toggle{display:none}
   .ans{padding-left:24px !important}
 }
 @media (max-width:640px){
   :root{--pad:16px}
+  /* 小屏顶栏收紧：图标/字号/间距同步缩小，保证徽标 + 双按钮不溢出 */
+  .brand{gap:6px; min-width:0}
+  .brand-icon{width:34px;height:34px}
+  .brand-icon svg{width:34px;height:34px}
+  .brand-name{font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis}
+  .brand-badge{font-size:10px; letter-spacing:.2px; padding:2px 8px}
+  .topbar-in{gap:8px}
+  .topbar-actions{gap:4px}
   .gh-btn span{display:none}
   .gh-btn{padding:0; width:40px; justify-content:center}
   .demo-toolbar{padding:14px; border-radius:var(--md-sys-shape-corner-large-increased)}
   .dt-hint{margin-right:0}
-  .dt-sep{display:none}
   .feat,.dl-card,.step{padding:22px}
   .hero-cta .m3-btn{flex:1 1 auto}
   .faq summary{padding:16px 18px}
   .faq .ans{padding:0 18px 20px}
-  .stat{padding:18px 18px 16px}
+  .foot-grid{grid-template-columns:1fr; gap:32px}
+  .foot-brand{max-width:none}
+  .orbit{display:none}
+  .appicon-wrap{width:min(220px,56vw)}
+  .orbit-chip{font-size:12px; height:30px; padding:0 12px}
+  .oc1{left:-2%}
+  .oc2{right:-2%}
+  .oc3{left:-2%}
 }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Cloudflared Helper Desktop",
+  "alternateName": "Cloudflared 隧道管理器",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Linux",
+  "license": "https://github.com/lingyicute/Cloudflared-Helper-Desktop/blob/main/LICENSE",
+  "offers": { "@type": "Offer", "price": "0" },
+  "author": { "@type": "Person", "name": "lingyicute" },
+  "codeRepository": "https://github.com/lingyicute/Cloudflared-Helper-Desktop",
+  "programmingLanguage": "Python",
+  "description": "基于 Python + GTK4 的桌面应用：管理多条 Cloudflare Tunnel 连接，内置 cloudflared 版本管理。"
+}
+</script>
 </head>
 <body id="top">
+<a class="skip-link" href="#main">跳到正文</a>
 <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="appiconGrad" x1="0" y1="0" x2="1" y2="1">
@@ -1027,7 +1057,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.6 5.5v13L19.2 12z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7.2" y="7.2" width="9.6" height="9.6" rx="1.8" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3.4" y="5.4" width="17.2" height="13.2" rx="2.6"/><path d="M7.6 10.4l2.5 2.4-2.5 2.4M12.8 15.2h3.8"/></symbol>
-  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5.6" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="18.4" r="1.7" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.6" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18.4" cy="12" r="1.7" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20.2 4.4v4.8h-4.8"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10.6m0 0-4-4m4 4 4-4M5 19.6h14"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7.6h14M10 7.6V5.4h4v2.2M6.6 7.6 7.6 19.2h8.8l1-11.6"/></symbol>
@@ -1081,14 +1111,11 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
       <a class="gh-btn" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop" target="_blank" rel="noopener">
         <svg class="ic" aria-hidden="true"><use href="#i-github"></use></svg><span>GitHub</span>
       </a>
-      <button class="m3-icon-btn nav-toggle" id="navToggle" type="button" aria-label="展开导航" aria-expanded="false">
-        <svg class="ic s20" aria-hidden="true"><use href="#i-menu"></use></svg>
-      </button>
     </div>
   </div>
 </header>
 
-<main>
+<main id="main">
 <!-- ============================== Hero ============================== -->
 <section class="hero" aria-labelledby="t-hero">
   <div class="hero-bg" aria-hidden="true"></div>
@@ -1106,11 +1133,12 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
           <svg class="ic" aria-hidden="true"><use href="#i-github"></use></svg>在 GitHub 上查看</a>
       </div>
       <div class="hero-chips">
-        <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-monitor"></use></svg>Linux / macOS</span>
+        <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-monitor"></use></svg>Linux 桌面</span>
         <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg>Flatpak</span>
         <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg>GTK4</span>
         <span class="m3-chip suggestion"><svg class="ic" aria-hidden="true"><use href="#i-lock"></use></svg>AGPL-3.0</span>
       </div>
+      <a class="hero-note" href="#preview"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg>往下滚动，不用安装就能在浏览器里点一点完整界面</a>
     </div>
     <div class="hero-visual reveal d2">
       <div class="appicon-wrap">
@@ -1130,9 +1158,11 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
   <div class="shell">
     <div class="sec-head center reveal">
       <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-monitor"></use></svg>在线预览 · 直接上手点</span>
+      <h2 class="sec-title" id="t-preview">不用安装，先把玩真正的界面</h2>
       <p class="sec-sub">
         下面这个窗口是用原生 HTML / CSS / JS 复刻的：同样的标题栏、
         同样的 boxed-list、同样的状态灯与文案。点「+」新建、点圆钮连接、点终端图标读日志、切到「版本管理」下载 cloudflared —— 行为都跟着真实代码走。
+        隧道、版本号与日志均为演示数据，可随意折腾，随时用工具条右侧的按钮重置。
       </p>
     </div>
 
@@ -1142,7 +1172,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
         <span>窗口里的按钮都能点：试试 <b>+</b> 号新建隧道、行尾 <b>⋮</b> 菜单、右上角主菜单与「版本管理」页。</span>
       </div>
       <div class="dt-actions">
-        <button class="m3-btn tonal" id="demoQuick" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg>剪贴板快速新建演示</button>
+        <button class="m3-btn tonal" id="demoQuick" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg>剪贴板快速连接演示</button>
         <button class="m3-icon-btn outlined" id="demoReset" type="button" title="重置演示" aria-label="重置演示"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
       </div>
     </div>
@@ -1156,9 +1186,9 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
               <svg class="ic" aria-hidden="true"><use href="#i-add"></use></svg></button>
             <div class="tb-spacer"></div>
             <div class="viewswitcher" role="tablist" aria-label="页面切换">
-              <button id="tabTunnels" role="tab" aria-selected="true" type="button">
+              <button id="tabTunnels" role="tab" aria-selected="true" aria-controls="pageTunnels" type="button">
                 <svg class="ic" aria-hidden="true"><use href="#i-network"></use></svg>隧道</button>
-              <button id="tabVersions" role="tab" aria-selected="false" type="button">
+              <button id="tabVersions" role="tab" aria-selected="false" aria-controls="pageVersions" type="button">
                 <svg class="ic" aria-hidden="true"><use href="#i-update"></use></svg>版本管理</button>
             </div>
             <div class="tb-spacer"></div>
@@ -1168,7 +1198,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
               <svg class="ic" aria-hidden="true"><use href="#i-close"></use></svg></button>
           </div>
           <div class="mock-body">
-            <div class="page active" id="pageTunnels">
+            <div class="page active" id="pageTunnels" role="tabpanel" aria-labelledby="tabTunnels">
               <div class="scroller" id="tunnelScroller">
                 <div class="clamp">
                   <div class="toolbar-head">
@@ -1189,7 +1219,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
                 </div>
               </div>
             </div>
-            <div class="page" id="pageVersions">
+            <div class="page" id="pageVersions" role="tabpanel" aria-labelledby="tabVersions">
               <div class="scroller"><div class="prefs" id="prefsRoot"></div></div>
             </div>
           </div>
@@ -1216,6 +1246,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
       </div>
     </div>
     <p class="mock-hint-small"><svg class="ic s16" aria-hidden="true"><use href="#i-arrow-right"></use></svg>窗口较宽，可左右滑动查看完整界面</p>
+    <noscript><div class="nojs-note"><svg class="ic" aria-hidden="true"><use href="#i-info"></use></svg><span>交互式界面预览需要启用 JavaScript。本页其余内容（功能介绍、安装方式、常见问题）不受影响。</span></div></noscript>
 
   </div>
 </section>
@@ -1237,8 +1268,8 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
       </article>
       <article class="feat reveal d1">
         <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg></span>
-        <h3>剪贴板快速新建</h3>
-        <p>窗口获得焦点后读一次剪贴板，发现 <span class="mono">*.trycloudflare.com</span> 链接就询问是否连接；点「是」时主机名和名称都填好了。</p>
+        <h3>剪贴板快速连接</h3>
+        <p>窗口获得焦点后读一次剪贴板，发现 <span class="mono">*.trycloudflare.com</span> 链接就询问是否连接；点「是」时主机名和名称都填好了，只剩一个端口号要敲。</p>
         <div class="tags"><span class="tag">焦点检测</span><span class="tag">150 ms 延迟</span><span class="tag">一链只问一次</span></div>
       </article>
       <article class="feat reveal d2">
@@ -1259,6 +1290,12 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
         <p>程序启动时自动连接标了「自动连接」的隧道、一键复制等效命令行、连接失败时从提示条直接跳到日志、退出前确认断开。</p>
         <div class="tags"><span class="tag">自动连接</span><span class="tag">复制命令行</span><span class="tag">退出确认</span></div>
       </article>
+      <article class="feat reveal d2">
+        <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-terminal"></use></svg></span>
+        <h3>额外参数直通</h3>
+        <p>高级设置里可以追加任意 cloudflared 参数，原样拼到命令行末尾；引号不配对会在保存时就被拦下，而不是启动时才炸，报错还能在日志里找到。</p>
+        <div class="tags"><span class="tag">原样透传</span><span class="tag">保存时校验</span><span class="tag">失败可查日志</span></div>
+      </article>
     </div>
   </div>
 </section>
@@ -1276,6 +1313,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
         <div class="step-num" aria-hidden="true">1</div>
         <h3>复制快速隧道链接</h3>
         <p>在任意机器上跑一条快速隧道，把输出的 <code class="mono">https://xxx.trycloudflare.com</code> 整条复制下来。</p>
+        <div class="cmd"><b>$</b>&nbsp;cloudflared tunnel --url localhost:8080</div>
       </article>
       <article class="step reveal d1">
         <div class="step-num" aria-hidden="true">2</div>
@@ -1285,7 +1323,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
       <article class="step reveal d2">
         <div class="step-num" aria-hidden="true">3</div>
         <h3>敲端口，回车保存</h3>
-        <p>新建对话框里主机名与「yyyymmdd hh:mm:ss 快速隧道」都已经填好，光标停在端口框上，输入数字回车即可。</p>
+        <p>新建对话框里主机名与「yyyymmdd hh:mm:ss 快速隧道」都已经填好，光标停在端口框上（默认值已选中），输入数字后按 <span class="kbd">Enter</span> 即可，全程不用碰鼠标。</p>
       </article>
     </div>
   </div>
@@ -1309,6 +1347,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
         <div class="ans">
           <p>因为 <code>cloudflared access</code> 的 <code>ssh</code> / <code>rdp</code> / <code>smb</code> 并不是不同的协议实现，它们只是 <code>tcp</code> 的别名：四个子命令共用同一个 Action 和同一组 flag，源码中没有任何地方读取子命令名；<code>ssh://</code>、<code>rdp://</code> 这类 scheme 也只用来推导缺省的 <code>--url</code>，对转发行为没有任何影响。</p>
           <p>因此本应用统一执行：<code>cloudflared access tcp --hostname &lt;隧道主机名&gt; --url &lt;监听地址&gt;:&lt;端口&gt;</code></p>
+          <p>只有一个例外：cloudflared <code>2020.6.1</code> 之前的古董版本还没有 <code>tcp</code> 子命令；不过官方只支持一年以内的版本，就别惦记它们了。</p>
         </div>
       </details>
       <details class="faq">
@@ -1334,7 +1373,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
             <li>同一条链接一个会话只问一次；</li>
             <li>已经建过相同主机名的隧道就不再问；</li>
             <li>在预填对话框里点了「取消」不会吞掉链接，下次切回窗口还会再问；</li>
-            <li>不想要可以在主菜单里关掉「剪贴板快速新建」。</li>
+            <li>不想要可以在主菜单里关掉「剪贴板快速连接」。</li>
           </ul>
         </div>
       </details>
@@ -1356,7 +1395,18 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
           <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
         </summary>
         <div class="ans">
-          <p>Linux 与 macOS，自动识别 <code>amd64</code> / <code>arm64</code> / <code>arm</code> / <code>386</code>。分发方式有两种：Flatpak（GNOME 50 运行时，x86_64 与 aarch64）与 PyInstaller 便携 <code>tar.gz</code>，都从 GitHub Releases 下载。</p>
+          <p>安装包只发 Linux（<code>x86_64</code> / <code>aarch64</code> 的 Flatpak 与便携版）；代码本身跨平台，macOS 上装好 PyGObject 与 GTK4 / libadwaita 也能从源码跑。cloudflared 二进制的下载支持 <code>amd64</code> / <code>arm64</code> / <code>arm</code> / <code>386</code> 自动匹配，macOS 取 <code>.tgz</code> 包解压安装。</p>
+        </div>
+      </details>
+      <details class="faq">
+        <summary>
+          <span class="faq-ic"><svg class="ic" aria-hidden="true"><use href="#i-folder"></use></svg></span>
+          <span class="faq-q">配置和下载的 cloudflared 存在哪里？</span>
+          <span class="faq-chev"><svg class="ic" aria-hidden="true"><use href="#i-chevron"></use></svg></span>
+        </summary>
+        <div class="ans">
+          <p>隧道配置是纯文本 JSON，放在 <code>~/.config/cloudflared-tunnel-manager/config.json</code>，手改、备份、同步到别的机器都可以（写坏了也不会炸，启动时会自动回退默认值）。</p>
+          <p>下载的 cloudflared 按版本分目录，放在 <code>~/.local/share/cloudflared-tunnel-manager/versions/&lt;版本&gt;/</code>。</p>
         </div>
       </details>
     </div>
@@ -1377,7 +1427,7 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
           <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span>
           <div><h3>Flatpak</h3><div class="sub">推荐 · GNOME 50 运行时</div></div>
         </div>
-        <p class="dl-desc">沙箱内运行，只申请 Wayland、网络与自身配置目录权限；随运行时统一升级。</p>
+        <p class="dl-desc">沙箱内运行，只申请 Wayland、网络、图形加速，以及自身配置 / 数据 / 缓存目录权限；随 GNOME 运行时统一升级。</p>
         <div class="dl-list">
           <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
             <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
@@ -1397,10 +1447,10 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
         <div class="dl-list">
           <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
             <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
-            <span class="nm">…-linux-x86_64.tar.gz</span><span class="sz">x86_64</span></a>
+            <span class="nm" title="cloudflared-tunnel-manager-<版本>-linux-x86_64.tar.gz（版本号随每次构建变化）">*-linux-x86_64.tar.gz</span><span class="sz">x86_64</span></a>
           <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
             <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
-            <span class="nm">…-linux-aarch64.tar.gz</span><span class="sz">aarch64</span></a>
+            <span class="nm" title="cloudflared-tunnel-manager-<版本>-linux-aarch64.tar.gz（版本号随每次构建变化）">*-linux-aarch64.tar.gz</span><span class="sz">aarch64</span></a>
         </div>
       </article>
 
@@ -1409,11 +1459,15 @@ footer.site{background:var(--md-sys-color-surface-container); padding-block:clam
           <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-code"></use></svg></span>
           <div><h3>从源码运行</h3><div class="sub">Python ≥ 3.10 · GTK 4 · libadwaita ≥ 1.4</div></div>
         </div>
-        <p class="dl-desc">适合想改点什么的你。装好 PyGObject 与 GTK4 / libadwaita，然后一条命令起。</p>
+        <p class="dl-desc">适合想改点什么的你。装好 PyGObject 与 GTK4 / libadwaita（macOS 用 Homebrew 装同名包），然后一条命令起。</p>
         <div class="code-block">
-          <button class="cp" type="button" data-copy="sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+          <button class="cp" type="button" data-copy="git clone https://github.com/lingyicute/Cloudflared-Helper-Desktop
+cd Cloudflared-Helper-Desktop
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
 python3 main.py" aria-label="复制命令"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
-          <pre><span class="cmt"># Debian / Ubuntu 24.04+</span>
+          <pre><span class="cmt"># 克隆仓库并安装依赖</span>
+git clone https://github.com/lingyicute/Cloudflared-Helper-Desktop
+cd Cloudflared-Helper-Desktop
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
 python3 main.py</pre>
         </div>
@@ -1430,19 +1484,19 @@ flatpak run uk._92li.cftm.CloudflaredTunnelManager</pre>
       </div>
       <div class="code-block reveal d1">
         <button class="cp" type="button" data-copy="tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
-./cloudflared-tunnel-manager/cloudflared-tunnel-manager --self-test   # 可选：环境自检" aria-label="复制命令"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
+./cloudflared-tunnel-manager/cloudflared-tunnel-manager" aria-label="复制命令"><svg class="ic" aria-hidden="true"><use href="#i-copy"></use></svg></button>
         <pre><span class="cmt"># 解压便携包（--self-test 可先验环境）</span>
 tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
 ./cloudflared-tunnel-manager/cloudflared-tunnel-manager</pre>
       </div>
     </div>
 
-    <div class="cta-band reveal" style="margin-top:clamp(40px,12vw,140px)">
+    <div class="cta-band reveal" style="margin-top:clamp(36px,6vw,64px)">
       <span class="deco quarter" aria-hidden="true"></span>
       <span class="deco ring" aria-hidden="true"></span>
       <span class="deco dot" aria-hidden="true"></span>
-      <h2>一个窗口，搞定所有隧道</h2>
-      <p>快去试试吧！</p>
+      <h2>把散落的隧道，都收进这一个窗口</h2>
+      <p>去 Releases 下载安装包，或从源码运行。装好后先去「版本管理」拿一个 cloudflared，再把常用隧道一条条存进来，以后就是点一下的事。</p>
       <div class="actions">
         <a class="m3-btn filled large" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
           <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>前往 Releases 下载</a>
@@ -1506,6 +1560,8 @@ tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
 <script>
 (function () {
 'use strict';
+/* 主脚本存活标记：CSS 靠它启用滚动显现；脚本失效时内容保持可见 */
+document.documentElement.classList.add('js');
 var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 var store = {
@@ -1612,20 +1668,11 @@ function chromaCurve(t) { return Math.pow(Math.sin(Math.PI * Math.max(0, Math.mi
 function schemeFor(seedHex, dark) {
   var s = hexToOklch(seedHex);
   var C = Math.max(0.085, Math.min(0.185, s[1])), H = s[2];
-  function pal(scale, hue, c) { return function (t) { return oklchToHex(toneL(t), c * chromaCurve(t), H + hue); }; }
-  var pri = pal(1, 0, C), sec = pal(1, 0, C * 0.36), ter = pal(1, 60, C * 0.62);
-  var neu = pal(1, 0, 0.012), nv = pal(1, 0, 0.034);
+  function pal(hue, c) { return function (t) { return oklchToHex(toneL(t), c * chromaCurve(t), H + hue); }; }
+  var pri = pal(0, C), sec = pal(0, C * 0.36), ter = pal(60, C * 0.62);
+  var neu = pal(0, 0.012), nv = pal(0, 0.034);
   var err = function (t) { return oklchToHex(toneL(t), 0.19 * chromaCurve(t), 27); };
   if (!dark) return {
-    '--pri': pri(40), '--on-pri': '#ffffff', '--pri-c': pri(90), '--on-pri-c': pri(10),
-    '--sec': sec(40), '--on-sec': '#ffffff', '--sec-c': sec(90), '--on-sec-c': sec(10),
-    '--ter': ter(40), '--on-ter': '#ffffff', '--ter-c': ter(90), '--on-ter-c': ter(10),
-    '--err': err(40), '--on-err': '#ffffff', '--err-c': err(90), '--on-err-c': err(10),
-    '--surf': neu(98), '--on-surf': neu(10), '--surf-var': nv(90), '--on-surf-var': nv(30),
-    '--surf-lo': neu(100), '--surf-c-low': neu(96), '--surf-c': neu(94),
-    '--surf-c-high': neu(92), '--surf-c-highest': neu(90), '--surf-dim': neu(87), '--surf-bright': neu(98),
-    '--outline': nv(50), '--outline-var': nv(80),
-    '--inv-surf': neu(20), '--inv-on-surf': neu(95), '--inv-pri': pri(80), '--scrim': 'rgba(0,0,0,.32)',
     '--md-sys-color-primary': pri(40), '--md-sys-color-on-primary': '#ffffff',
     '--md-sys-color-primary-container': pri(90), '--md-sys-color-on-primary-container': pri(10),
     '--md-sys-color-secondary': sec(40), '--md-sys-color-on-secondary': '#ffffff',
@@ -1645,15 +1692,6 @@ function schemeFor(seedHex, dark) {
     '--md-sys-color-scrim': 'rgba(0,0,0,.32)', '--md-sys-color-surface-tint': pri(40)
   };
   return {
-    '--pri': pri(80), '--on-pri': pri(20), '--pri-c': pri(30), '--on-pri-c': pri(90),
-    '--sec': sec(80), '--on-sec': sec(20), '--sec-c': sec(30), '--on-sec-c': sec(90),
-    '--ter': ter(80), '--on-ter': ter(20), '--ter-c': ter(30), '--on-ter-c': ter(90),
-    '--err': err(80), '--on-err': err(20), '--err-c': err(30), '--on-err-c': err(90),
-    '--surf': neu(6), '--on-surf': neu(90), '--surf-var': nv(30), '--on-surf-var': nv(80),
-    '--surf-lo': neu(4), '--surf-c-low': neu(10), '--surf-c': neu(12),
-    '--surf-c-high': neu(17), '--surf-c-highest': neu(22), '--surf-dim': neu(6), '--surf-bright': neu(24),
-    '--outline': nv(60), '--outline-var': nv(30),
-    '--inv-surf': neu(90), '--inv-on-surf': neu(20), '--inv-pri': pri(40), '--scrim': 'rgba(0,0,0,.55)',
     '--md-sys-color-primary': pri(80), '--md-sys-color-on-primary': pri(20),
     '--md-sys-color-primary-container': pri(30), '--md-sys-color-on-primary-container': pri(90),
     '--md-sys-color-secondary': sec(80), '--md-sys-color-on-secondary': sec(20),
@@ -1673,14 +1711,9 @@ function schemeFor(seedHex, dark) {
     '--md-sys-color-scrim': 'rgba(0,0,0,.55)', '--md-sys-color-surface-tint': pri(80)
   };
 }
-var SEEDS = [
-  { hex: '#F26522', name: '应用橙（应用图标）' },
-  { hex: '#6750A4', name: 'M3 默认紫' },
-  { hex: '#1A73E8', name: '云蓝' },
-  { hex: '#2EC27E', name: '状态绿' },
-  { hex: '#D8437A', name: '玫瑰' }
-];
-var theme = { dark: false, seed: SEEDS[0].hex };
+/* 强调色取自应用图标橙，由 schemeFor() 展开成整套 M3 色板 */
+var SEED_DEFAULT = '#F26522';
+var theme = { dark: false, seed: SEED_DEFAULT };
 
 function applyTheme(animate) {
   var root = document.documentElement;
@@ -1689,19 +1722,17 @@ function applyTheme(animate) {
   root.style.colorScheme = theme.dark ? 'dark' : 'light';
   var vars = schemeFor(theme.seed, theme.dark);
   for (var k in vars) if (vars.hasOwnProperty(k)) root.style.setProperty(k, vars[k]);
-  var meta = $('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', vars['--md-sys-color-surface-container-low']);
+  /* 有 JS 时两个 media 变体都跟随当前主题（无 JS 时靠 media 属性兜底） */
+  $$('meta[name="theme-color"]').forEach(function (meta) {
+    meta.setAttribute('content', vars['--md-sys-color-surface']);
+    meta.removeAttribute('media');
+  });
   var btn = $('#themeBtn');
   if (btn) {
     btn.innerHTML = icon(theme.dark ? 'sun' : 'moon', 'ic s20');
     btn.setAttribute('aria-label', theme.dark ? '切换到浅色主题' : '切换到深色主题');
     btn.title = btn.getAttribute('aria-label');
   }
-  $$('.seed').forEach(function (b) {
-    b.setAttribute('aria-pressed', String(b.dataset.seed.toLowerCase() === theme.seed.toLowerCase()));
-    b.style.color = b.dataset.seed;
-    b.style.background = b.dataset.seed;
-  });
 }
 function snack(msg) {
   var host = $('#snackHost');
@@ -1716,20 +1747,50 @@ function snack(msg) {
 /* Data layer */
 var STATE_LABELS = { stopped: '已停止', starting: '正在连接…', running: '已连接', error: '连接失败' };
 var BIN_DIR = '~/.local/share/cloudflared-tunnel-manager/versions';
+function demoTags() {
+  /* 演示版本号随当前日期生成，页面放多久都不会显得过期 */
+  var now = new Date(), y = now.getFullYear(), m = now.getMonth() + 1;
+  var py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1;
+  var ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1;
+  function ago(n) {
+    var d = new Date(now.getTime() - n * 86400000);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  return {
+    rc: ny + '.' + nm + '.0-rc.1', rcDate: ago(1),
+    latest: y + '.' + m + '.1', latestDate: ago(6),
+    prev: y + '.' + m + '.0', prevDate: ago(9),
+    older: py + '.' + pm + '.3', olderDate: ago(24),
+    oldest: py + '.' + pm + '.1', oldestDate: ago(31),
+    ancient: py + '.' + pm + '.0', ancientDate: ago(58)
+  };
+}
+function detectDemoPlatform() {
+  /* 跟真实版 detect_platform() / asset_name() 一个思路：按访问者的系统与架构展示对应的资源名 */
+  var ua = ((navigator.userAgent || '') + ' ' + (navigator.platform || '')).toLowerCase();
+  var sys = (ua.indexOf('mac') !== -1 || ua.indexOf('darwin') !== -1) ? 'darwin' : 'linux';
+  var arch = (ua.indexOf('aarch64') !== -1 || ua.indexOf('arm64') !== -1) ? 'arm64' : 'amd64';
+  return {
+    system: sys, arch: arch,
+    asset: sys === 'darwin' ? 'cloudflared-darwin-' + arch + '.tgz' : 'cloudflared-linux-' + arch,
+    systemBinary: sys === 'darwin' ? '/opt/homebrew/bin/cloudflared' : '/usr/bin/cloudflared'
+  };
+}
+var DT = demoTags(), DP = detectDemoPlatform();
 var V = {
-  platform: 'linux', arch: 'amd64', asset: 'cloudflared-linux-amd64',
+  platform: DP.system, arch: DP.arch, asset: DP.asset,
   activePolicy: 'latest-installed',
-  installed: ['2026.9.0', '2026.8.3'],
-  systemBinary: '/usr/bin/cloudflared',
-  systemVersion: '2026.7.1',
-  latestStable: '2026.9.1',
+  installed: [DT.prev, DT.older],
+  systemBinary: DP.systemBinary,
+  systemVersion: DT.older,
+  latestStable: DT.latest,
   releases: [
-    { tag: '2026.9.1', date: '2026-09-11' },
-    { tag: '2026.9.0', date: '2026-09-09' },
-    { tag: '2026.8.3', date: '2026-08-31' },
-    { tag: '2026.8.2', date: '2026-08-14' },
-    { tag: '2026.8.1', date: '2026-08-13' },
-    { tag: '2026.8.0', date: '2026-08-13' }
+    { tag: DT.rc, date: DT.rcDate, prerelease: true },
+    { tag: DT.latest, date: DT.latestDate },
+    { tag: DT.prev, date: DT.prevDate },
+    { tag: DT.older, date: DT.olderDate },
+    { tag: DT.oldest, date: DT.oldestDate },
+    { tag: DT.ancient, date: DT.ancientDate, hasAsset: false }
   ]
 };
 function binPath(tag) { return BIN_DIR + '/' + tag + '/cloudflared'; }
@@ -1753,11 +1814,13 @@ function tunnel(name, hostname, port, opt) {
 }
 var tunnels = [];
 var quickClipboardHost = 'calm-frost-lantern-4t.trycloudflare.com';
+/* 种子数据里那条“已建好的快速隧道”用另一条 host：演示按钮才能走完 询问→预填→保存 全流程 */
+var quickSeedHost = 'quiet-harbor-glass-2m.trycloudflare.com';
 function seedData() {
   var now = Date.now();
   tunnels = [
     tunnel('家庭 NAS 管理面板', 'nas-panel.example.com', 21128, { autostart: true, state: 'running' }),
-    tunnel(quickName(new Date(now - 42 * 60000)), quickClipboardHost, 8080, { state: 'running' }),
+    tunnel(quickName(new Date(now - 42 * 60000)), quickSeedHost, 8080, { state: 'running' }),
     tunnel('公司 Windows 远程桌面', 'rdp-office.example.com', 3390, { state: 'stopped', flaky: true }),
     tunnel('MySQL 只读副本', 'db-readonly.example.com', 13306, { listen: '0.0.0.0', state: 'error' })
   ];
@@ -1766,14 +1829,14 @@ function seedData() {
   t0.logs = [
     logAt(s0, '$ cloudflared access tcp --hostname nas-panel.example.com --url 127.0.0.1:21128'),
     logAt(s0, iso(s0) + ' INF Starting tunnel client'),
-    logAt(s0, iso(s0) + ' INF Version 2026.9.0 (Checksum 5c8a2c4f)'),
+    logAt(s0, iso(s0) + ' INF Version ' + V.installed[0] + ' (Checksum 5c8a2c4f)'),
     logAt(new Date(s0.getTime() + 900), iso(new Date(s0.getTime() + 900)) + ' INF Start Websocket listener host=127.0.0.1:21128'),
     logAt(new Date(s0.getTime() + 1400), iso(new Date(s0.getTime() + 1400)) + ' INF Connection registered connIndex=0 location=HKG')
   ];
   t1.logs = [
-    logAt(s1, '$ cloudflared access tcp --hostname ' + quickClipboardHost + ' --url 127.0.0.1:8080'),
+    logAt(s1, '$ cloudflared access tcp --hostname ' + quickSeedHost + ' --url 127.0.0.1:8080'),
     logAt(s1, iso(s1) + ' INF Starting tunnel client'),
-    logAt(s1, iso(s1) + ' INF Version 2026.9.0 (Checksum 5c8a2c4f)'),
+    logAt(s1, iso(s1) + ' INF Version ' + V.installed[0] + ' (Checksum 5c8a2c4f)'),
     logAt(new Date(s1.getTime() + 800), iso(new Date(s1.getTime() + 800)) + ' INF Start Websocket listener host=127.0.0.1:8080'),
     logAt(new Date(s1.getTime() + 1300), iso(new Date(s1.getTime() + 1300)) + ' INF Connection registered connIndex=0 location=HKG'),
     logAt(new Date(now - 6 * 60000), iso(new Date(now - 6 * 60000)) + ' WRN Failed to dial to edge with quic: timeout (retrying with http2)'),
@@ -1794,7 +1857,13 @@ function displayName(t) { return (t.name || '').trim() || t.hostname || '未命�
 function isActive(t) { return t.state === 'running' || t.state === 'starting'; }
 function find(id) { return tunnels.filter(function (t) { return t.id === id; })[0] || null; }
 function runningCount() { return tunnels.filter(isActive).length; }
-function commandFor(t) { return 'cloudflared access tcp --hostname ' + t.hostname + ' --url ' + t.listen + ':' + t.port; }
+function shellQuote(word) {
+  /* 近似 shlex.quote：安全字符直接用，否则单引号包裹并转义内嵌单引号 */
+  word = String(word);
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(word)) return word;
+  return "'" + word.replace(/'/g, "'\\''") + "'";
+}
+function commandFor(t) { return 'cloudflared access tcp --hostname ' + shellQuote(t.hostname) + ' --url ' + shellQuote(t.listen + ':' + t.port); }
 
 var mock = $('#mock'), scrim = $('#scrim'), toastHost = $('#toastHost');
 function toast(msg, action) {
@@ -1833,9 +1902,11 @@ function openPopover(anchor, items) {
   closePopover();
   var pop = document.createElement('div');
   pop.className = 'mock-popover';
+  pop.setAttribute('role', 'menu');
   pop.innerHTML = items.map(function (it, i) {
     if (it === '-') return '<div class="sep"></div>';
-    return '<button type="button" data-i="' + i + '"' + (it.checked !== undefined ? ' aria-checked="' + it.checked + '"' : '') + '>' +
+    var role = it.checked !== undefined ? 'menuitemcheckbox' : 'menuitem';
+    return '<button type="button" role="' + role + '" data-i="' + i + '"' + (it.checked !== undefined ? ' aria-checked="' + it.checked + '"' : '') + '>' +
       (it.icon ? icon(it.icon) : '') + '<span>' + esc(it.label) + '</span>' +
       (it.checked !== undefined ? '<svg class="ic tick" aria-hidden="true"><use href="#i-check"></use></svg>' : '') +
       '</button>';
@@ -1863,6 +1934,9 @@ function messageDialog(opt) {
   return new Promise(function (resolve) {
     var wrap = document.createElement('div');
     wrap.className = 'dialog msgdialog';
+    wrap.setAttribute('role', 'alertdialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', opt.heading);
     wrap.innerHTML =
       '<h4>' + esc(opt.heading) + '</h4>' +
       '<div class="body">' + (opt.bodyHTML || esc(opt.body || '')) + '</div>' +
@@ -1978,12 +2052,12 @@ function startTunnel(id) {
       t.lastError = 'Unable to reach the origin service.';
       pushLog(t, '[进程已退出，状态码 1]');
       setState(t, 'error');
-      toast('「' + displayName(t) + '」连接失败：' + t.lastError, { label: '日志', fn: function () { openLogs(t.id); } });
+      toast(displayName(t) + ' 连接失败：' + t.lastError, { label: '日志', fn: function () { openLogs(t.id); } });
       return;
     }
     pushLog(t, iso(new Date()) + ' INF Start Websocket listener host=' + t.listen + ':' + t.port);
     setState(t, 'running');
-    toast('「' + displayName(t) + '」已连接：' + t.listen + ':' + t.port);
+    toast(displayName(t) + ' 已连接：' + t.listen + ':' + t.port);
   }, 1700);
   setTimeout(function () {
     if (isActive(t) && t.state === 'running') pushLog(t, iso(new Date()) + ' INF Connection registered connIndex=0 location=HKG');
@@ -2008,11 +2082,16 @@ function startAll() {
     switchPage('versions');
     return;
   }
-  var started = 0;
+  var started = 0, already = 0;
   tunnels.forEach(function (t) {
-    if (!isActive(t)) { if (startTunnel(t.id)) started++; }
+    if (isActive(t)) already++;
+    else if (startTunnel(t.id)) started++;
   });
-  if (started) toast('已自动连接 ' + started + ' 个隧道');
+  /* 与真实版 start_all 一致：只在“什么都没干成”时说话 */
+  if (started === 0) {
+    if (already === tunnels.length) toast('所有隧道已在运行中');
+    else toast('没有可启动的隧道');
+  }
 }
 function stopAll() {
   tunnels.forEach(function (t) { if (isActive(t)) stopTunnel(t.id); });
@@ -2081,10 +2160,15 @@ logView.addEventListener('scroll', function () {
   }
 });
 
-var prefsRoot = $('#prefsRoot'), downloads = {}, refreshing = false;
+var prefsRoot = $('#prefsRoot'), downloads = {}, downloadTimers = {}, refreshing = false;
 function verCmp(a, b) {
-  var pa = String(a).split(/[^\d]+/).filter(Boolean).map(Number);
-  var pb = String(b).split(/[^\d]+/).filter(Boolean).map(Number);
+  /* 与真实版 version_key() 同语义：带预发布后缀的视为更旧 */
+  function key(t) {
+    var nums = String(t).split(/[^\d]+/).filter(Boolean).map(Number);
+    nums.push(/-.*[a-z]/i.test(String(t)) ? 0 : 1);
+    return nums;
+  }
+  var pa = key(a), pb = key(b);
   for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
     var x = pa[i] || 0, y = pb[i] || 0;
     if (x !== y) return x - y;
@@ -2121,7 +2205,7 @@ function renderPrefs() {
       '</div>' +
       '<button class="row-icon-btn" id="vOpenDir" type="button" title="打开安装目录" aria-label="打开安装目录">' + icon('folder') + '</button>' +
       '</div>' +
-      '<div class="pref-box">' + choices.map(function (c) {
+      '<div class="pref-box" role="radiogroup" aria-label="版本选择">' + choices.map(function (c) {
         return '<div class="pref-row" data-choice="' + esc(c.key) + '" role="radio" aria-checked="' + (V.activePolicy === c.key) + '"' +
           (c.sensitive === false ? ' aria-disabled="true"' : '') + ' tabindex="0">' +
           '<span class="radio"></span>' +
@@ -2148,7 +2232,7 @@ function renderPrefs() {
         var suffix;
         if (downloads[r.tag] != null) {
           suffix = '<div class="progress" data-progress="' + r.tag + '"><div class="bar" style="width:' + downloads[r.tag] + '%"></div><span>' +
-            Math.round(downloads[r.tag]) + '% · ' + speedFor(r.tag) + '</span></div>' +
+            Math.round(downloads[r.tag]) + '% · ' + speedFor(r.tag) + ' MB/s</span></div>' +
             '<button class="row-icon-btn" data-cancel="' + r.tag + '" type="button" title="取消" aria-label="取消">' + icon('close') + '</button>';
         } else if (isInstalled(r.tag)) {
           suffix = '<span class="installed-badge">' + icon('check') + '已安装</span>';
@@ -2208,6 +2292,7 @@ function wirePrefs() {
   prefsRoot.querySelectorAll('[data-cancel]').forEach(function (b) {
     b.addEventListener('click', function () {
       var tag = b.dataset.cancel;
+      if (downloadTimers[tag]) { clearInterval(downloadTimers[tag]); delete downloadTimers[tag]; }
       delete downloads[tag];
       renderPrefs();
       toast('已取消安装 ' + tag);
@@ -2249,9 +2334,12 @@ function downloadVersion(tag) {
   downloads[tag] = 0;
   renderPrefs();
   var iv = setInterval(function () {
+    /* 取消/重置会删掉 downloads[tag] 并停掉本定时器；这里再兜底一次，避免 NaN 污染 */
+    if (downloads[tag] == null) { clearInterval(iv); return; }
     var pct = downloads[tag] + 4 + Math.random() * 9;
     if (pct >= 100) {
       clearInterval(iv);
+      delete downloadTimers[tag];
       delete downloads[tag];
       V.installed.push(tag);
       V.installed.sort(function (a, b) { return verCmp(b, a); });
@@ -2265,9 +2353,10 @@ function downloadVersion(tag) {
     if (bar) bar.style.width = pct + '%';
     if (txt) txt.textContent = Math.round(pct) + '% · ' + speedFor(tag) + ' MB/s';
   }, 300);
+  downloadTimers[tag] = iv;
 }
 
-function openTunnelDialog(cfg, isNew, focusPort) {
+function openTunnelDialog(cfg, isNew, focusPort, onClose) {
   cfg = cfg || {};
   var d = {
     name: cfg.name || '', hostname: cfg.hostname || '',
@@ -2276,6 +2365,9 @@ function openTunnelDialog(cfg, isNew, focusPort) {
   };
   var node = document.createElement('div');
   node.className = 'dialog window-dialog';
+  node.setAttribute('role', 'dialog');
+  node.setAttribute('aria-modal', 'true');
+  node.setAttribute('aria-label', isNew ? '新建隧道' : '编辑隧道');
   node.innerHTML =
     '<div class="dlg-titlebar">' +
       '<button class="gtk-btn flat" data-x="cancel" type="button">取消</button>' +
@@ -2355,8 +2447,17 @@ function openTunnelDialog(cfg, isNew, focusPort) {
     if (!(port >= 1 && port <= 65535)) { dialogToast(node, '端口必须在 1 到 65535 之间'); portInput.focus(); return; }
     var extra = q('extra').value.trim();
     if (extra) {
-      var dq = (extra.match(/"/g) || []).length, sq = (extra.match(/'/g) || []).length;
-      if (dq % 2 || sq % 2) { dialogToast(node, '额外参数格式错误: No closing quotation'); q('extra').focus(); return; }
+      /* 近似 shlex.split 的引号检查：转义与引号上下文都考虑，只拦真正未闭合的 */
+      var quote = null, escaped = false, bad = false, ci, ch;
+      for (ci = 0; ci < extra.length; ci++) {
+        ch = extra[ci];
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\') { escaped = true; continue; }
+        if (quote) { if (ch === quote) quote = null; }
+        else if (ch === '"' || ch === "'") quote = ch;
+      }
+      if (quote || escaped) bad = true;
+      if (bad) { dialogToast(node, '额外参数格式错误: No closing quotation'); q('extra').focus(); return; }
     }
     var listen = q('listen').value.trim() || '127.0.0.1';
     if (/\s/.test(listen)) { dialogToast(node, '监听地址不能包含空格'); q('listen').focus(); return; }
@@ -2375,21 +2476,29 @@ function openTunnelDialog(cfg, isNew, focusPort) {
         if (was) toast('配置已保存，将在下次连接时生效'); else toast('配置已保存');
       }
     }
+    if (onClose) onClose(true);
     closeDialog();
   }
-  node.querySelector('[data-x="cancel"]').addEventListener('click', function () { closeDialog(); });
+  node.querySelector('[data-x="cancel"]').addEventListener('click', function () { closeDialog(); if (onClose) onClose(false); });
   node.querySelector('[data-x="save"]').addEventListener('click', save);
   node.querySelectorAll('input').forEach(function (inp) {
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
   });
-  openDialog(node);
+  /* Esc 关闭同样视为取消：经全局 Esc 处理走 hook 回来 */
+  openDialog(node, function () { if (onClose) onClose(false); });
   if (focusPort) { portInput.focus(); try { portInput.select(); } catch (e) {} }
   else { var h = q('hostname'); h.focus(); try { h.setSelectionRange(h.value.length, h.value.length); } catch (e) {} }
 }
 
 var quickEnabled = true;
+var quickAsked = {};
 function runQuickTunnel() {
-  if (!quickEnabled) { toast('剪贴板快速新建已关闭（可在主菜单里打开）'); return; }
+  if (!quickEnabled) { toast('剪贴板快速连接已关闭（可在主菜单里打开）'); return; }
+  if (dialogOpen() || popNode) { toast('先把当前窗口关了，再试剪贴板演示'); return; }
+  var known = tunnels.some(function (t) { return (t.hostname || '').trim().toLowerCase() === quickClipboardHost; });
+  if (known) { toast('这条快速隧道已经建过了，不再重复询问'); return; }
+  if (quickAsked[quickClipboardHost]) { toast('同一条链接一个会话只问一次——点重置可再试'); return; }
+  quickAsked[quickClipboardHost] = true;
   setTimeout(function () {
     messageDialog({
       heading: '是否要连接这个快速隧道？',
@@ -2397,7 +2506,9 @@ function runQuickTunnel() {
       buttons: [{ label: '否', value: 'cancel' }, { label: '是', value: 'accept', style: 'suggested' }]
     }).then(function (v) {
       if (v !== 'accept') return;
-      openTunnelDialog({ name: quickName(new Date()), hostname: quickClipboardHost, port: 21128, listen: '127.0.0.1' }, true, true);
+      /* 在预填对话框里取消：链接不算消耗掉，下次还能再问（与真实版 forget() 一致） */
+      openTunnelDialog({ name: quickName(new Date()), hostname: quickClipboardHost, port: 21128, listen: '127.0.0.1' }, true, true,
+        function (saved) { if (!saved) delete quickAsked[quickClipboardHost]; });
     });
   }, 260);
 }
@@ -2406,9 +2517,9 @@ function mainMenuItems() {
   return [
     { label: '全部启动', fn: startAll },
     { label: '全部停止', fn: stopAll },
-    { label: '剪贴板快速新建', checked: quickEnabled, fn: function () {
+    { label: '剪贴板快速连接', checked: quickEnabled, fn: function () {
         quickEnabled = !quickEnabled;
-        toast(quickEnabled ? '已开启：窗口获得焦点时检测剪贴板中的快速隧道链接' : '已关闭剪贴板快速新建');
+        toast(quickEnabled ? '已开启：窗口获得焦点时检测剪贴板中的快速隧道链接' : '已关闭剪贴板快速连接');
       } },
     '-',
     { label: '关于', fn: showAbout },
@@ -2418,6 +2529,9 @@ function mainMenuItems() {
 function showAbout() {
   var node = document.createElement('div');
   node.className = 'dialog about-dialog';
+  node.setAttribute('role', 'dialog');
+  node.setAttribute('aria-modal', 'true');
+  node.setAttribute('aria-label', '关于');
   node.innerHTML =
     '<div class="dlg-titlebar">' +
       '<span style="width:34px" aria-hidden="true"></span>' +
@@ -2428,7 +2542,7 @@ function showAbout() {
       '<div class="about-hero">' +
         '<svg viewBox="0 0 128 128" aria-hidden="true"><use href="#i-app"></use></svg>' +
         '<h4>Cloudflared 隧道管理器</h4>' +
-        '<div class="ver">版本 1.0.0 · Material 3 重构版</div>' +
+        '<div class="ver">版本 1.0.0</div>' +
       '</div>' +
       '<div class="about-comments">通过 Cloudflare Tunnel (cloudflared access) 管理多条任意 TCP 隧道连接，并内置 cloudflared 版本管理。</div>' +
       '<div class="about-links">' +
@@ -2439,7 +2553,7 @@ function showAbout() {
         '<div class="link-row">' + icon('code') + '开发者<span class="v">lingyicute</span></div>' +
         '<div class="link-row">' + icon('shield') + '许可证<span class="v">AGPL-3.0</span></div>' +
       '</div>' +
-      '<div class="about-foot">GTK4 · libadwaita · Python 3.10+ · Material 3 Expressive</div>' +
+      '<div class="about-foot">Python 3.10+ · GTK4 · libadwaita · AGPL-3.0</div>' +
     '</div>';
   node.querySelector('[data-x="close"]').addEventListener('click', closeDialog);
   openDialog(node);
@@ -2468,6 +2582,14 @@ function switchPage(name) {
 }
 $('#tabTunnels').addEventListener('click', function () { switchPage('tunnels'); });
 $('#tabVersions').addEventListener('click', function () { switchPage('versions'); });
+[$('#tabTunnels'), $('#tabVersions')].forEach(function (tab, i, tabs) {
+  tab.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    var next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    next.focus(); next.click();
+  });
+});
 $('#mockAdd').addEventListener('click', function () { openTunnelDialog(null, true, false); });
 $('#emptyAdd').addEventListener('click', function () { openTunnelDialog(null, true, false); });
 $('#mockMenuBtn').addEventListener('click', function () { openPopover(this, mainMenuItems()); });
@@ -2543,17 +2665,28 @@ function fitStage() {
   stage.classList.toggle('small', small);
   inner.style.transform = 'scale(' + s + ')';
   inner.style.left = (small ? 0 : Math.max(0, Math.round((avail - INNER_W * s) / 2))) + 'px';
-  stage.style.height = Math.round(INNER_H * s + (small ? 16 : 0)) + 'px';
+  /* 高度写在滚动层上：stage 只提供 padding + 边框，上下内边距自然对称；
+     再把横向滚动条占掉的高度补回来（overlay 滚动条的设备补 0） */
+  var h0 = Math.round(INNER_H * s);
+  scroll.style.height = h0 + 'px';
+  var sb = scroll.offsetHeight - scroll.clientHeight;
+  if (sb > 0) scroll.style.height = (h0 + sb) + 'px';
 }
 
 function resetDemo() {
+  Object.keys(downloadTimers).forEach(function (k) { clearInterval(downloadTimers[k]); delete downloadTimers[k]; });
   Object.keys(downloads).forEach(function (k) { delete downloads[k]; });
   quickEnabled = true;
+  quickAsked = {};
   V.activePolicy = 'latest-installed';
-  V.installed = ['2026.9.0', '2026.8.3'];
+  V.installed = [DT.prev, DT.older];
   seedData();
   switchPage('tunnels');
   logWin.classList.remove('show'); logTarget = null;
+  logFollow = true;
+  var fb = $('#logFollow');
+  fb.setAttribute('aria-pressed', 'true');
+  fb.style.background = 'var(--adw-raised)';
   closeDialog();
   renderTunnels();
   $('#tunnelScroller').scrollTop = 0;
@@ -2565,7 +2698,13 @@ var STREAM = [
   ' WRN Failed to dial to edge with quic: timeout (retrying with http2)',
   ' INF Connection retry: 1 attempt(s)'
 ];
+var stageVisible = true;
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(function (entries) { stageVisible = entries[0].isIntersecting; }, { threshold: 0.05 }).observe($('#stage'));
+}
 setInterval(function () {
+  /* 页面在后台、或演示窗口滚出视口时不刷日志，省 CPU */
+  if (document.hidden || !stageVisible) return;
   tunnels.forEach(function (t) {
     if (!isActive(t)) return;
     if (Math.random() < 0.28) pushLog(t, iso(new Date()) + STREAM[Math.floor(Math.random() * STREAM.length)]);
@@ -2576,19 +2715,11 @@ var topbar = $('#topbar');
 window.addEventListener('scroll', function () {
   topbar.classList.toggle('scrolled', window.scrollY > 8);
 }, { passive: true });
-$('#navToggle').addEventListener('click', function () {
-  var open = $('#nav').classList.toggle('open');
-  this.setAttribute('aria-expanded', String(open));
-});
-$$('#nav a').forEach(function (a) {
-  a.addEventListener('click', function () { $('#nav').classList.remove('open'); $('#navToggle').setAttribute('aria-expanded', 'false'); });
-});
 $('#themeBtn').addEventListener('click', function () {
   theme.dark = !theme.dark;
   store.set('cftm-theme', theme.dark ? 'dark' : 'light');
   applyTheme(true);
   snack(theme.dark ? '已切换到深色主题（应用窗口跟随）' : '已切换到浅色主题（应用窗口跟随）');
-  fitStage();
 });
 $$('[data-copy]').forEach(function (b) {
   b.addEventListener('click', function () {
@@ -2604,7 +2735,6 @@ if (io) $$('.reveal').forEach(function (n) { io.observe(n); });
 else $$('.reveal').forEach(function (n) { n.classList.add('in'); });
 theme.dark = store.get('cftm-theme') ? store.get('cftm-theme') === 'dark'
   : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-theme.seed = store.get('cftm-seed') || SEEDS[0].hex;
 applyTheme(false);
 seedData();
 renderTunnels();
@@ -2640,13 +2770,12 @@ if (window.matchMedia) {
   var followSystem = function (e) {
     var stored = null;
     try { stored = localStorage.getItem('cftm-theme'); } catch (err) {}
-    if (!stored && e.matches !== theme.dark) { theme.dark = e.matches; applyTheme(true); fitStage(); }
+    if (!stored && e.matches !== theme.dark) { theme.dark = e.matches; applyTheme(true); }
   };
   if (mqDark.addEventListener) mqDark.addEventListener('change', followSystem);
   else if (mqDark.addListener) mqDark.addListener(followSystem);
 }
 })();
 </script>
-<script>
 </body>
 </html>

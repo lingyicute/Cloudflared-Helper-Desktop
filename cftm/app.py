@@ -214,7 +214,7 @@ class MainWindow(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append("全部启动", "win.start-all")
         menu.append("全部停止", "win.stop-all")
-        menu.append("剪贴板快速新建", "win.clipboard-quick-tunnel")
+        menu.append("剪贴板快速连接", "win.clipboard-quick-tunnel")
         section = Gio.Menu()
         section.append("关于", "app.about")
         section.append("退出", "app.quit")
@@ -431,7 +431,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast(f"已自动连接 {started} 个隧道")
         return False
 
-    # ------------------------------------------------------------ 剪贴板快速新建
+    # ------------------------------------------------------------ 剪贴板快速连接
     def _quick_tunnel_enabled(self) -> bool:
         return bool(self.config.get("clipboard_quick_tunnel", True))
 
@@ -451,7 +451,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.toast(
             "已开启：窗口获得焦点时检测剪贴板中的快速隧道链接"
             if enabled
-            else "已关闭剪贴板快速新建"
+            else "已关闭剪贴板快速连接"
         )
 
     def _quick_tunnel_accept(self, hostname: str) -> None:

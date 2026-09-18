@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """新建 / 编辑隧道对话框的端到端测试（不含剪贴板那条路径）。
 
-``TunnelDialog`` 被剪贴板快速新建和普通新建共用，这里守住普通路径不被改坏：
+``TunnelDialog`` 被剪贴板快速连接和普通新建共用，这里守住普通路径不被改坏：
 标题、初始焦点、鼠标点“保存”、以及编辑已有隧道时的行为。
 
     xvfb-run -a python3 tests/e2e_tunnel_dialog.py

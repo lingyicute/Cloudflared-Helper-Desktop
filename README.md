@@ -6,7 +6,7 @@
 ## 功能
 
 - **多隧道并发**：保存任意数量的隧道，可同时连接多条；每条隧道独立的状态指示、启停按钮与实时日志。
-- **剪贴板快速新建**：窗口获得焦点时读取剪贴板，发现 `*.trycloudflare.com` 快速隧道链接就弹窗询问；点「是」直接唤出新建隧道对话框，主机名和名称（`yyyymmdd hh:mm:ss 快速隧道`）都已填好，**只需要填一个本地端口号**，回车即可保存。
+- **剪贴板快速连接**：窗口获得焦点时读取剪贴板，发现 `*.trycloudflare.com` 快速隧道链接就弹窗询问；点「是」直接唤出新建隧道对话框，主机名和名称（`yyyymmdd hh:mm:ss 快速隧道`）都已填好，**只需要填一个本地端口号**，回车即可保存。
 - **cloudflared 版本管理**
   - 自动识别系统/架构（`amd64` / `arm64` / `arm` / `386`，Linux 与 macOS）
   - 从 GitHub Releases 拉取版本列表，一键下载安装，显示下载进度，可取消
@@ -32,7 +32,7 @@ cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口
 > 当时还没有 `tcp`）。应用内下载的版本来自官方 Releases 的最新 30 个，全部满足；只有手动把二进制指向
 > 2020 年之前的系统 PATH cloudflared 时，才需要改用 `access ssh`。然而，Cloudflare 官方仅支持一年以内的 cloudflared 版本，出于安全性上的考虑，梨不建议您使用如此古老的 cloudflared。
 
-## 剪贴板快速新建
+## 剪贴板快速连接
 
 从别处复制一条 `cloudflared tunnel --url ...` 输出的快速隧道链接，切回本应用窗口即可：
 
@@ -48,7 +48,7 @@ cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口
 - **在预填的新建对话框里点了“取消”不会吞掉链接**：同一条链接下次切回窗口时还会再问一次。
 - **窗口内部换焦点不算「获得焦点」**：只有整个窗口拿到键盘焦点才会读剪贴板，并延迟 150 ms，避免 Wayland 下刚获得焦点就读不到剪贴板、以及 alt-tab 掠过的抖动。
 
-不想用可以在主菜单里关掉「剪贴板快速新建」，对应配置项 `clipboard_quick_tunnel`。
+不想用可以在主菜单里关掉「剪贴板快速连接」，对应配置项 `clipboard_quick_tunnel`。
 
 ## 配置
 
@@ -79,7 +79,7 @@ python3 main.py
 
 | 作业 | 说明 |
 | --- | --- |
-| `check` | 字节编译 + 单元测试 + doctest + 在 Xvfb 中导入全部模块，并跑两个端到端测试（剪贴板快速新建、隧道对话框） |
+| `check` | 字节编译 + 单元测试 + doctest + 在 Xvfb 中导入全部模块，并跑两个端到端测试（剪贴板快速连接、隧道对话框） |
 | `pyinstaller` | 在 `ubuntu-24.04` / `ubuntu-24.04-arm` 上打包便携 tar.gz（x86_64、aarch64） |
 | `flatpak` | 使用 GNOME 50 运行时构建 `.flatpak` 包 |
 | `release` | 自动创建 GitHub Release 并上传所有产物 |
