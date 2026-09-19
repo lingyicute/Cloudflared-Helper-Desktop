@@ -1,25 +1,26 @@
-###  ‎
-
-###  ‎
-
+<br>
+<br>
+<br>
+<br>
 <p align="center">
-  <img src="./data/uk._92li.cftm.CloudflaredTunnelManager.svg" alt="Logo" width="96" height="96" onerror="this.style.display='none'"/>
-<h1 align="center">Cloudflared-Helper-Desktop</h1></p>
+  <img src="./data/uk._92li.cftm.CloudflaredTunnelManager.svg" alt="Logo" width="96" height="96"/>
+</p>
+
+<h1 align="center">Cloudflared-Helper-Desktop</h1>
 
 <p align="center">
 一个基于 Python + GTK4 的现代化桌面应用，用于管理多条 Cloudflare Tunnel 客户端连接，</p>
-<p align="center">
-<a href="https://github.com/lingyicute/Cloudflared-Helper">Cloudflared-Helper</a> 的 GUI 继任者。</p>
-
-###  ‎
-
+<p align="center"><a href="https://github.com/lingyicute/Cloudflared-Helper">Cloudflared-Helper</a> 的 GUI 继任者。
+</p>
+<br>
+<br>
 <p align="center">
   <a href="https://chd.92li.uk/">🌐 Official Website</a> •
   <a href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases">📦 Download</a> •
   <a href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/issues">🐛 Report Bug</a>
 </p>
-
-###  ‎
+<br>
+<br>‎
 
 ## 功能
 
