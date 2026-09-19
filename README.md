@@ -9,7 +9,7 @@
 <p align="center">
 一个基于 Python + GTK4 的现代化桌面应用，用于管理多条 Cloudflare Tunnel 客户端连接，</p>
 <p align="center">
-Cloudflared-Helper 的 GUI 继任者。</p>
+<a href="https://github.com/lingyicute/Cloudflared-Helper">Cloudflared-Helper</a> 的 GUI 继任者。</p>
 
 ###  ‎
 
