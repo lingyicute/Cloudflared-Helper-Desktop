@@ -815,6 +815,29 @@ html[data-theme="dark"] .step .cmd b{color:var(--md-sys-color-primary)}
 /* --------------------------------------------------------------------------
    15. Download cards
    -------------------------------------------------------------------------- */
+/* 安全提示：把推荐的 Flatpak 运行方式及其边界放在下载安装区最前面。 */
+.security-note{
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:18px; align-items:center;
+  margin:-20px 0 clamp(34px,4vw,52px); padding:22px 24px;
+  border:1px solid var(--md-sys-color-outline-variant);
+  border-radius:var(--md-sys-shape-corner-extra-large);
+  background:var(--md-sys-color-secondary-container); color:var(--md-sys-color-on-secondary-container);
+}
+.security-note .ic-box{
+  width:48px; height:48px; border-radius:var(--md-sys-shape-corner-large); flex:none;
+  display:grid; place-items:center; background:color-mix(in srgb, var(--md-sys-color-on-secondary-container) 12%, transparent);
+}
+.security-note .ic-box .ic{width:25px; height:25px}
+.security-note .copy{min-width:0}
+.security-note .label{font-size:12px; line-height:16px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; opacity:.82}
+.security-note h3{margin-top:2px; font-family:var(--md-ref-typeface-brand); font-size:21px; line-height:28px; font-weight:400}
+.security-note p{margin-top:6px; max-width:78ch; font-size:14px; line-height:22px; letter-spacing:.15px}
+.security-note a:not(.m3-btn){color:inherit; text-decoration:underline; text-underline-offset:3px; font-weight:600}
+.security-note .m3-btn{background:var(--md-sys-color-on-secondary-container); color:var(--md-sys-color-secondary-container); flex:none}
+@media (max-width:720px){
+  .security-note{grid-template-columns:auto minmax(0,1fr); padding:20px; gap:14px}
+  .security-note .m3-btn{grid-column:1/-1; justify-self:start}
+}
 .dl-card{
   position:relative; background:var(--md-sys-color-surface-container-lowest);
   border:1px solid var(--md-sys-color-outline-variant);
@@ -1418,16 +1441,27 @@ html.js .reveal.in{opacity:1; transform:none}
   <div class="shell">
     <div class="sec-head reveal">
       <span class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>下载安装</span>
-      <h2 class="sec-title" id="t-install">挑一种方式装上去</h2>
+      <h2 class="sec-title" id="t-install">优先选 Flatpak，再挑其他方式</h2>
       <p class="sec-sub">所有构建产物都在 GitHub Actions 里自动生成并上传到 Releases，文件名与架构一一对应。</p>
     </div>
+
+    <aside class="security-note reveal" aria-label="推荐使用 Flatpak 的安全说明">
+      <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-shield"></use></svg></span>
+      <div class="copy">
+        <div class="label">推荐运行方式 · Flatpak</div>
+        <h3>优先把应用放进沙箱</h3>
+        <p>只要是软件，就有可能存在漏洞。攻击者，尤其是国家级定向攻击者，可能会攻击本软件，进而尝试在你的电脑上执行代码。Flatpak 会把本软件及其子进程隔离在沙箱中，按权限限制其可接触的主机资源；它不是万能防护，但能在漏洞被利用时帮助限制影响范围，作为纵深防御的一层。更多安全性建议见 <a href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener">ComputeSec</a>。</p>
+      </div>
+      <a class="m3-btn" href="#flatpak-install"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>使用 Flatpak</a>
+    </aside>
+
     <div class="grid-3">
-      <article class="dl-card featured reveal">
+      <article class="dl-card featured reveal" id="flatpak-install">
         <div class="head">
           <span class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span>
-          <div><h3>Flatpak</h3><div class="sub">推荐 · GNOME 50 运行时</div></div>
+          <div><h3>Flatpak</h3><div class="sub">推荐运行方式 · 安全隔离 · GNOME 50 运行时</div></div>
         </div>
-        <p class="dl-desc">沙箱内运行，只申请 Wayland、网络、图形加速，以及自身配置 / 数据 / 缓存目录权限；随 GNOME 运行时统一升级。</p>
+        <p class="dl-desc"><strong>推荐优先使用。</strong> 在沙箱内运行，仅申请 Wayland、网络、图形加速以及自身配置 / 数据 / 缓存目录权限；这为可能的漏洞利用增加一层纵深防御，同时随 GNOME 运行时统一升级。</p>
         <div class="dl-list">
           <a class="dl-item" href="https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases/latest" target="_blank" rel="noopener">
             <svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg>
@@ -1542,6 +1576,7 @@ tar -xzf cloudflared-tunnel-manager-*-linux-x86_64.tar.gz
         <a href="https://github.com/lingyicute/Cloudflared-Helper" target="_blank" rel="noopener">Cloudflared-Helper（老项目）</a>
         <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener">Cloudflare Tunnel 文档</a>
         <a href="https://github.com/cloudflare/cloudflared" target="_blank" rel="noopener">Cloudflared GitHub</a>
+        <a href="https://github.com/lingyicute/ComputeSec" target="_blank" rel="noopener">ComputeSec（安全建议）</a>
       </div>
     </div>
     <div class="foot-bottom">

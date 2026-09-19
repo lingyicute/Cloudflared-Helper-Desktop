@@ -73,7 +73,26 @@ cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口
 - 配置保存在 `~/.config/cloudflared-tunnel-manager/config.json`
 - 二进制保存在 `~/.local/share/cloudflared-tunnel-manager/versions/<版本>/`
 
-## 运行
+## 推荐运行方式：Flatpak
+
+> [!IMPORTANT]
+> **推荐使用 Flatpak 运行本软件。** 
+> 
+> 只要是软件，就有可能存在漏洞。攻击者，尤其是国家级定向攻击者，可能会攻击本软件，进而尝试在用户的电脑上执行代码。
+>
+> Flatpak 会将本软件及其启动的子进程放入沙箱，并按权限限制它们能够接触的主机资源。它不能替代及时更新系统，软硬件加固等安全措施，也不能保证完全阻止攻击；但在漏洞被利用时，它有助于限制影响范围，作为**纵深防御**的一层。因此，除非确有需要，请优先选择 Flatpak，而不是便携包或直接从源码运行。
+>
+> 如需更多安全性建议，请参阅 [ComputeSec](https://github.com/lingyicute/ComputeSec)。
+
+从 [Releases](https://github.com/lingyicute/Cloudflared-Helper-Desktop/releases) 下载与架构相符的 `.flatpak` 文件后安装并启动：
+
+```bash
+# 以 x86_64 包为例；aarch64 请替换为对应文件名
+flatpak install --user ./cloudflared-tunnel-manager-x86_64.flatpak
+flatpak run uk._92li.cftm.CloudflaredTunnelManager
+```
+
+## 从源码运行（不推荐作为日常运行方式）
 
 依赖：Python ≥ 3.10、GTK 4、libadwaita ≥ 1.4、PyGObject。
 
