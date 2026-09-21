@@ -666,6 +666,10 @@ html[data-theme="dark"] .mock-popover{box-shadow:0 12px 30px rgba(0,0,0,.6), 0 0
 .dlg-titlebar{height:47px; flex:none; display:flex; align-items:center; gap:6px; padding:0 6px; background:var(--adw-header); position:relative}
 .dlg-titlebar::after{content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--adw-shade)}
 .dlg-titlebar .t{flex:1; text-align:center; font-weight:700; font-size:14.5px}
+/* 日志窗口 / 关于弹窗：左侧无按钮，普通流式布局会把标题顶到左边；
+   与 GTK AdwHeaderBar 的 CenterBox 一致，标题绝对居中，不受右侧按钮数量影响 */
+.log-window .dlg-titlebar .title{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); white-space:nowrap; z-index:1}
+.about-dialog .dlg-titlebar .t{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); flex:none; white-space:nowrap; z-index:1}
 .dlg-body{flex:1; min-height:0; overflow-y:auto; background:var(--adw-bg); border-radius:0 0 12px 12px}
 .log-window{position:absolute; z-index:120; width:760px; height:480px; left:150px; top:96px; background:var(--adw-bg); border-radius:12px; box-shadow:0 26px 70px rgba(0,0,0,.42); display:none; flex-direction:column; overflow:hidden; animation:rise .22s cubic-bezier(.2,0,0,1)}
 .log-window.show{display:flex}
@@ -1248,7 +1252,6 @@ html.js .reveal.in{opacity:1; transform:none}
           </div>
           <div class="log-window" id="logWin" role="dialog" aria-label="日志窗口" aria-modal="false">
             <div class="dlg-titlebar">
-              <span style="width:34px" aria-hidden="true"></span>
               <div class="title"><b id="logTitle">日志</b><span id="logState">已停止</span></div>
               <div style="flex:1"></div>
               <button class="tb-btn" id="logFollow" type="button" title="自动滚动到底部" aria-pressed="true">
@@ -2569,7 +2572,6 @@ function showAbout() {
   node.setAttribute('aria-label', '关于');
   node.innerHTML =
     '<div class="dlg-titlebar">' +
-      '<span style="width:34px" aria-hidden="true"></span>' +
       '<div class="t">关于</div><div style="flex:1"></div>' +
       '<button class="tb-btn round" data-x="close" type="button" aria-label="关闭">' + icon('close') + '</button>' +
     '</div>' +
