@@ -1110,6 +1110,7 @@ html.js .reveal.in{opacity:1; transform:none}
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M14.5 5.5H19V10M19 5.5 12.6 11.9M18 14v3.5a1.5 1.5 0 0 1-1.5 1.5H6.5A1.5 1.5 0 0 1 5 17.5V7.5A1.5 1.5 0 0 1 6.5 6H10"/></symbol>
   <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="6.2" y="4.6" width="11.6" height="15" rx="2.4"/><rect x="9.6" y="2.9" width="4.8" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><path d="M9.5 11h5M9.5 14.6h5"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 9.5 12 15l5.5-5.5"/></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M6.5 14.5 12 9l5.5 5.5"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v5.2"/><circle cx="12" cy="8.1" r=".95" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3.4l8 4v9.2l-8 4-8-4V7.4z"/><path d="M4.3 7.5 12 11.5l7.7-4M12 11.5v9"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.8" y="10.4" width="14.4" height="9.4" rx="2.6"/><path d="M8.4 10.4V8a3.6 3.6 0 0 1 7.2 0v2.4"/></symbol>
@@ -2433,7 +2434,7 @@ function openTunnelDialog(cfg, isNew, focusPort, onClose) {
               '<div class="spin">' +
                 '<input type="number" min="1" max="65535" data-f="port" value="' + d.port + '">' +
                 '<div class="spin-btns">' +
-                  '<button type="button" data-step="1" aria-label="增加" style="transform:rotate(180deg)">' + icon('chevron', 'ic') + '</button>' +
+                  '<button type="button" data-step="1" aria-label="增加">' + icon('chevron-up', 'ic') + '</button>' +
                   '<button type="button" data-step="-1" aria-label="减少">' + icon('chevron', 'ic') + '</button>' +
                 '</div>' +
               '</div>' +
