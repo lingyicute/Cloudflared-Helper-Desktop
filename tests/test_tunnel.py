@@ -176,3 +176,13 @@ class TunnelTests(unittest.TestCase):
         proc._promote_running(proc._proc)
         self.assertEqual(proc.state, STATE_STARTING)
         proc._proc, proc.state = None, STATE_STOPPED
+
+    def test_stop_after_exit_does_not_hide_the_crash(self):
+        proc = self.proc()
+        child = Mock()
+        proc._proc, proc.state, proc._pending_exit = child, STATE_RUNNING, 3
+        proc.stop()
+        child.send_signal.assert_not_called()
+        self.assertFalse(proc._stopping)
+        proc._finish_exit()
+        self.assertEqual(proc.state, STATE_ERROR)

@@ -247,7 +247,9 @@ class TunnelProcess(GObject.Object):
 
     def stop(self, force: bool = False) -> None:
         proc = self._proc
-        if proc is None:
+        # 子进程已退出、只是在等日志读完：没有可停的东西；此时置 _stopping 会把
+        # 一次崩溃记成“用户主动断开”，错误状态和提示都会丢失。
+        if proc is None or self._pending_exit is not None:
             return
         self._stopping = True
         self._append("[正在断开…]")
