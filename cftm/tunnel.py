@@ -166,6 +166,8 @@ class TunnelProcess(GObject.Object):
         self._line_buffer = bytearray()
         self._line_truncated = False
         self._stopping = False
+        # 普通 stop() 挂上的 5 秒强杀定时器；force 升级或进程退出时要摘掉
+        self._kill_timer: Optional[int] = None
         # 进程已退出、但管道里可能还压着没读完的输出时，记下退出码，等 EOF 再收尾
         self._pending_exit: Optional[int] = None
         self._eof = False
@@ -264,11 +266,19 @@ class TunnelProcess(GObject.Object):
                 proc.send_signal(signal.SIGTERM)
         except Exception:  # noqa: BLE001  (非 Unix 平台)
             proc.force_exit()
-        if not force:
-            GLib.timeout_add_seconds(5, self._force_kill, proc)
+        if force:
+            self._cancel_kill_timer()
+        else:
+            self._kill_timer = GLib.timeout_add_seconds(5, self._force_kill, proc)
+
+    def _cancel_kill_timer(self) -> None:
+        if self._kill_timer is not None:
+            GLib.source_remove(self._kill_timer)
+            self._kill_timer = None
 
     # ------------------------------------------------------------ 回调
     def _force_kill(self, proc: Gio.Subprocess) -> bool:
+        self._kill_timer = None
         if self._proc is proc:
             self._append("[进程未响应，强制结束]")
             proc.force_exit()
@@ -365,6 +375,7 @@ class TunnelProcess(GObject.Object):
             code, self._pending_exit = self._pending_exit, None
         else:
             self._pending_exit = None
+        self._cancel_kill_timer()
         # 兜底收尾时管道可能由后代进程持有；取消未完成的读取，释放回调引用。
         if self._read_cancel is not None:
             self._read_cancel.cancel()
