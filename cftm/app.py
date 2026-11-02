@@ -174,6 +174,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._rows: list[TunnelRow] = []
         self._log_windows: dict[str, LogWindow] = {}
         self._force_close = False
+        self._quit_dialog: Optional[Adw.MessageDialog] = None
         self._binary_path: Optional[str] = None
 
         width, height = _window_size(self.config.get("window"))
@@ -590,6 +591,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._save_window_size()
             self.manager.stop_all()
             return False
+        if self._quit_dialog is not None:
+            # 确认框已经开着：Ctrl+Q / 关闭按钮再按一次不要叠第二个
+            self._quit_dialog.present()
+            return True
         dlg = Adw.MessageDialog(
             transient_for=self, heading="退出并断开所有隧道？",
             body=f"仍有 {running} 个隧道处于连接状态，退出后将全部断开。",
@@ -601,11 +606,13 @@ class MainWindow(Adw.ApplicationWindow):
         dlg.set_close_response("cancel")
 
         def on_response(_d, resp):
+            self._quit_dialog = None
             if resp == "quit":
                 self._force_close = True
                 self.close()
 
         dlg.connect("response", on_response)
+        self._quit_dialog = dlg
         dlg.present()
         return True
 
