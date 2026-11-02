@@ -1614,7 +1614,7 @@ function esc(s) {
 }
 function icon(name, cls) { return '<svg class="' + (cls || 'ic') + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>'; }
 function hhmmss(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0'); }
-function iso(d) { return d.toISOString().replace(/\\.\\d+Z$/, 'Z'); }
+function iso(d) { return d.toISOString().replace(/\.\d+Z$/, 'Z'); }
 function pad2(n) { return String(n).padStart(2, '0'); }
 function quickName(d) { return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + ' ' + hhmmss(d) + ' 快速隧道'; }
 function copyText(text, opts) {
