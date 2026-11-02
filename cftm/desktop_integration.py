@@ -50,12 +50,15 @@ def _quote_exec_arg(arg: str) -> str:
     """按 Desktop Entry 规范为 Exec= 中的单个参数加引号。"""
     # 百分号必须先转义为 %%：否则路径里的 % 会被当作 %f/%u 等字段码展开。
     arg = arg.replace("%", "%%")
-    if arg and not any(c in arg for c in " \t\n\"'\\><~|&;$*?#()`"):
+    if arg and not any(c in arg for c in " \t\n\r\"'\\><~|&;$*?#()`"):
         return arg
     escaped = arg.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
     # 规范要求 Exec 里的反斜杠先按引用规则转义一次，.desktop 值本身的字符串转义
     # 还要再来一次，所以最终一个反斜杠要写成四个。
-    return '"' + escaped.replace("\\", "\\\\") + '"'
+    quoted = escaped.replace("\\", "\\\\")
+    # 值层面的控制字符必须写成 \n \r \t，否则字面换行会截断 Exec= 行、可被注入额外键。
+    quoted = quoted.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    return '"' + quoted + '"'
 
 
 def launch_command() -> str:
