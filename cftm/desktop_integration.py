@@ -53,7 +53,9 @@ def _quote_exec_arg(arg: str) -> str:
     if arg and not any(c in arg for c in " \t\n\"'\\><~|&;$*?#()`"):
         return arg
     escaped = arg.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
-    return f'"{escaped}"'
+    # 规范要求 Exec 里的反斜杠先按引用规则转义一次，.desktop 值本身的字符串转义
+    # 还要再来一次，所以最终一个反斜杠要写成四个。
+    return '"' + escaped.replace("\\", "\\\\") + '"'
 
 
 def launch_command() -> str:
