@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from cftm.binary_manager import BinaryManager, version_key
+from cftm.binary_manager import BinaryManager, format_size, version_key
 
 
 class InlineThread:
@@ -189,3 +189,12 @@ class BinaryTests(unittest.TestCase):
         self.assertEqual(len(done), 2)
         self.assertIsNone(done[-1])
         self.assertFalse(self.bm.is_downloading(self.tag))
+
+
+class FormatSizeTests(unittest.TestCase):
+    def test_units_roll_over_at_the_displayed_value(self):
+        cases = {0: '0 B', 1023: '1023 B', 1023.6: '1.0 KB', 1024: '1.0 KB', 1536: '1.5 KB',
+                 1048575: '1.0 MB', 5 * 1024 ** 2: '5.0 MB', 1024 ** 3: '1.0 GB', 2 * 1024 ** 4: '2048.0 GB'}
+        for value, text in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(format_size(value), text)

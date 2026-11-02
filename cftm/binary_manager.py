@@ -104,12 +104,15 @@ def _parse_sha256_digest(digest: object) -> Optional[str]:
 
 def format_size(num: float) -> str:
     """把字节数格式化为人类可读的字符串，如「12.3 MB」。"""
-    num = float(num)
-    for unit in ("B", "KB", "MB"):
-        if num < 1024:
-            return f"{num:.0f} B" if unit == "B" else f"{num:.1f} {unit}"
+    num = max(float(num), 0.0)
+    if round(num) < 1024:
+        return f"{num:.0f} B"
+    # 按四舍五入后的显示值判断进位，避免出现「1024.0 KB」
+    for unit in ("KB", "MB", "GB"):
         num /= 1024
-    return f"{num:.1f} GB"
+        if round(num, 1) < 1024 or unit == "GB":
+            return f"{num:.1f} {unit}"
+    return f"{num:.1f} GB"  # pragma: no cover
 
 
 def format_speed(bytes_per_sec: float) -> str:
