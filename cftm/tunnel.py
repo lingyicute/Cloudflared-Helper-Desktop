@@ -251,6 +251,10 @@ class TunnelProcess(GObject.Object):
         # 一次崩溃记成“用户主动断开”，错误状态和提示都会丢失。
         if proc is None or self._pending_exit is not None:
             return
+        # 已经发过 SIGTERM、正在等它退出：再点一次“断开”不要重复发信号、重复记日志，
+        # 也不要再挂一个 5 秒定时器；只有显式 force 才升级为强杀。
+        if self._stopping and not force:
+            return
         self._stopping = True
         self._append("[正在断开…]")
         try:
