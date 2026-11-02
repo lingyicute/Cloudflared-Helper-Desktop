@@ -177,6 +177,22 @@ class TunnelTests(unittest.TestCase):
         self.assertEqual(proc.state, STATE_STARTING)
         proc._proc, proc.state = None, STATE_STOPPED
 
+    def test_repeated_stop_signals_the_child_once(self):
+        proc = self.proc()
+        child = Mock()
+        proc._proc, proc.state = child, STATE_RUNNING
+        try:
+            with patch('cftm.tunnel.GLib.timeout_add_seconds') as timer:
+                proc.stop()
+                proc.stop()
+                self.assertEqual(sum('正在断开' in line for line in proc.log_lines()), 1)
+                proc.stop(force=True)
+            child.send_signal.assert_called_once()
+            child.force_exit.assert_called_once()
+            timer.assert_called_once()
+        finally:
+            proc._proc, proc.state, proc._stopping = None, STATE_STOPPED, False
+
     def test_stop_after_exit_does_not_hide_the_crash(self):
         proc = self.proc()
         child = Mock()
