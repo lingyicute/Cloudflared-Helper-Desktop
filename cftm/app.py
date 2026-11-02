@@ -107,7 +107,7 @@ class TunnelRow(Adw.ActionRow):
         cfg = self.proc.config
         # PreferencesRow 默认开启 markup；构造时显式关闭后才能原样显示用户输入。
         self.set_title(cfg.display_name)
-        subtitle = f"{cfg.hostname}  →  {cfg.listen_host}:{cfg.port}"
+        subtitle = f"{cfg.hostname}  →  {cfg.listen_label}"
         if cfg.autostart:
             subtitle += "  ·  自动连接"
         self.set_subtitle(subtitle)
@@ -354,7 +354,7 @@ class MainWindow(Adw.ApplicationWindow):
             toast.set_timeout(6)
             self.toasts.add_toast(toast)
         elif state == STATE_RUNNING:
-            self.toast(f"{name} 已连接：{proc.config.listen_host}:{proc.config.port}")
+            self.toast(f"{name} 已连接：{proc.config.listen_label}")
 
     # ------------------------------------------------------------ 隧道操作
     def toast(self, message: str) -> None:
