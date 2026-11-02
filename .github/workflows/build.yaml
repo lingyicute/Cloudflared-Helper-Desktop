@@ -178,7 +178,8 @@ jobs:
           upload-artifact: true
 
   release:
-    if: github.event_name != 'pull_request'
+    # workflow_dispatch 可以在任意分支上手动触发；nightly 只能由 main 发布
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     name: Publish release
     needs: [check, pyinstaller, flatpak]
     permissions:
