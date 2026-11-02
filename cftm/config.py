@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -81,10 +82,34 @@ class Config:
                 loaded = json.load(fh)
             if isinstance(loaded, dict):
                 self.data.update(loaded)
+            else:
+                self._set_aside("顶层不是 JSON 对象")
         except FileNotFoundError:
             pass
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        except (UnicodeError, json.JSONDecodeError) as exc:
             print(f"[config] 读取配置失败，使用默认值: {exc}")
+            self._set_aside(str(exc))
+        except OSError as exc:
+            print(f"[config] 读取配置失败，使用默认值: {exc}")
+
+    def _set_aside(self, reason: str) -> None:
+        """把读不懂的配置文件改名保留。
+
+        否则下一次 save() 会用默认值覆盖它，手改出错（比如多了个逗号）的整份隧道
+        配置就此丢失，用户连修一下再放回去的机会都没有。改名保留原文件权限（0600）。
+        """
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}")
+        # 同一秒内多次发生也不能互相覆盖
+        for n in range(1, 100):
+            if not backup.exists():
+                break
+            backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}-{n}")
+        try:
+            os.replace(self.path, backup)
+            print(f"[config] 原配置已保留为 {backup}（{reason}）")
+        except OSError as exc:
+            print(f"[config] 无法保留原配置: {exc}")
 
     def save(self) -> None:
         tmp: Path | None = None

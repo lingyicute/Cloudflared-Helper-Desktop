@@ -18,6 +18,23 @@ class ConfigTests(unittest.TestCase):
         self.path.write_bytes(b'\xff')
         self.assertEqual(Config(self.path).get('tunnels'), [])
 
+    def test_unreadable_config_is_set_aside_not_overwritten(self):
+        raws = (b'{"tunnels": [},', b'\xff', b'[]')
+        for raw in raws:
+            self.path.write_bytes(raw)
+            cfg = Config(self.path)
+            self.assertEqual(cfg.get('tunnels'), [])
+            self.assertFalse(self.path.exists())
+            cfg.save()
+            self.assertEqual(json.loads(self.path.read_text()), cfg.data)
+        backups = sorted(self.path.parent.glob('config.json.corrupt-*'))
+        self.assertEqual(sorted(b.read_bytes() for b in backups), sorted(raws))
+
+    def test_valid_config_is_not_set_aside(self):
+        self.path.write_text('{"active_version": "system"}')
+        self.assertEqual(Config(self.path).get('active_version'), 'system')
+        self.assertEqual(list(self.path.parent.iterdir()), [self.path])
+
     def test_save_does_not_follow_predictable_temp_symlink(self):
         victim = self.path.parent / 'other-file'
         victim.write_text('keep me')
