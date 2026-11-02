@@ -118,6 +118,14 @@ class TunnelConfig:
             raise ValueError("命令行参数不能包含 NUL 字符")
         return argv
 
+    @property
+    def listen_label(self) -> str:
+        """界面和命令行展示用的 ``host:port``：IPv6 加方括号、空地址按默认值，永不抛异常。"""
+        try:
+            return listener_address(self.listen_host, self.port)
+        except ValueError:
+            return f"{self.listen_host.strip() or '127.0.0.1'}:{self.port}"
+
     def command_string(self, binary: str = "cloudflared") -> str:
         try:
             argv = self.build_argv(binary)
@@ -127,9 +135,10 @@ class TunnelConfig:
             argv = [
                 binary, "access", "tcp",
                 "--hostname", self.hostname,
-                "--url", f"{self.listen_host or '127.0.0.1'}:{self.port}",
-                self.extra_args,
+                "--url", self.listen_label,
             ]
+            if self.extra_args:
+                argv.append(self.extra_args)
         return " ".join(shlex.quote(a) for a in argv)
 
 

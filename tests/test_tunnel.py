@@ -54,6 +54,16 @@ class TunnelTests(unittest.TestCase):
                 self.assertEqual(cfg.build_argv('cloudflared')[-1], f'[{host.strip("[]")}]:2222')
                 self.assertIn(f'[{host.strip("[]")}]:2222', cfg.command_string())
 
+    def test_listen_label_and_fallback_command(self):
+        cases = [('::1', '[::1]:2222'), ('', '127.0.0.1:2222'), ('localhost', 'localhost:2222'),
+                 ('http://x', 'http://x:2222')]
+        for host, label in cases:
+            cfg = TunnelConfig(hostname='tcp.example.com', listen_host=host, port=2222)
+            with self.subTest(host=host):
+                self.assertEqual(cfg.listen_label, label)
+        bad = TunnelConfig(hostname='a b', listen_host='::1', port=2222)
+        self.assertTrue(bad.command_string().endswith("--url '[::1]:2222'"))
+
     def test_invalid_arguments_are_rejected_before_spawn(self):
         for field, value in [('hostname', 'tcp\texample.com'), ('hostname', 'tcp\x00.example.com'),
                              ('listen_host', 'http://localhost'), ('listen_host', '[::1'),
