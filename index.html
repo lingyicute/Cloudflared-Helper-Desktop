@@ -1902,7 +1902,13 @@ function shellQuote(word) {
   if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(word)) return word;
   return "'" + word.replace(/'/g, "'\\''") + "'";
 }
-function commandFor(t) { return 'cloudflared access tcp --hostname ' + shellQuote(t.hostname) + ' --url ' + shellQuote(t.listen + ':' + t.port); }
+function listenLabel(t) {
+  /* 跟真实版 listener_address() 一致：IPv6 字面量要加方括号才能接端口 */
+  var h = (t.listen || '').trim() || '127.0.0.1';
+  if (h.indexOf(':') !== -1 && !/^\[.*\]$/.test(h)) h = '[' + h + ']';
+  return h + ':' + t.port;
+}
+function commandFor(t) { return 'cloudflared access tcp --hostname ' + shellQuote(t.hostname) + ' --url ' + shellQuote(listenLabel(t)); }
 
 var mock = $('#mock'), scrim = $('#scrim'), toastHost = $('#toastHost');
 function toast(msg, action) {
@@ -2023,7 +2029,7 @@ function renderTunnels() {
       '<span class="dot ' + chip + '" title="' + STATE_LABELS[st] + '"></span>' +
       '<div class="row-main">' +
         '<span class="row-title">' + esc(displayName(t)) + '</span>' +
-        '<span class="row-sub">' + esc(t.hostname) + '  →  ' + esc(t.listen) + ':' + t.port + (t.autostart ? '  ·  自动连接' : '') + '</span>' +
+        '<span class="row-sub">' + esc(t.hostname) + '  →  ' + esc(listenLabel(t)) + (t.autostart ? '  ·  自动连接' : '') + '</span>' +
       '</div>' +
       '<div class="row-actions">' +
         '<span class="state-chip ' + chip + '">' + STATE_LABELS[st] + '</span>' +
@@ -2051,7 +2057,7 @@ function pushLog(t, text) {
   }
 }
 function portConflict(t) {
-  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase(); return (h === 'localhost' || h === '::1') ? '127.0.0.1' : h; };
+  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase().replace(/^\[(.*)\]$/, '$1'); return (h === 'localhost' || h === '::1') ? '127.0.0.1' : h; };
   var any = ['0.0.0.0', '::', '0:0:0:0:0:0:0:0'];
   return tunnels.filter(function (p) {
     if (p === t || !isActive(p) || p.port !== t.port) return false;
@@ -2075,7 +2081,7 @@ function startTunnel(id) {
 
   t.lastError = null;
   setState(t, 'starting');
-  pushLog(t, '$ cloudflared access tcp --hostname ' + host + ' --url ' + t.listen + ':' + t.port);
+  pushLog(t, '$ cloudflared access tcp --hostname ' + host + ' --url ' + listenLabel(t));
   var fail = t.flaky;
   t.flaky = false;
   setTimeout(function () {
@@ -2094,9 +2100,9 @@ function startTunnel(id) {
       toast(displayName(t) + ' 连接失败：' + t.lastError, { label: '日志', fn: function () { openLogs(t.id); } });
       return;
     }
-    pushLog(t, iso(new Date()) + ' INF Start Websocket listener host=' + t.listen + ':' + t.port);
+    pushLog(t, iso(new Date()) + ' INF Start Websocket listener host=' + listenLabel(t));
     setState(t, 'running');
-    toast(displayName(t) + ' 已连接：' + t.listen + ':' + t.port);
+    toast(displayName(t) + ' 已连接：' + listenLabel(t));
   }, 1700);
   setTimeout(function () {
     if (isActive(t) && t.state === 'running') pushLog(t, iso(new Date()) + ' INF Connection registered connIndex=0 location=HKG');
