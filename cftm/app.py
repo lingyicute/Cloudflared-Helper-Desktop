@@ -613,15 +613,21 @@ class MainWindow(Adw.ApplicationWindow):
 class Application(Adw.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
-        self.config = Config()
-        self.bm = BinaryManager(DATA_DIR / "versions")
-        self.manager = TunnelManager(self.config)
+        # 这些对象只在主实例的 do_startup 里创建：再次启动应用时，进程在这里构造完
+        # Application 就把请求转交给已运行的实例然后退出；若此时就构造 BinaryManager，
+        # 它的启动清理会把主实例正在下载的 .install-* 暂存目录当作残留删掉。
+        self.config: Config
+        self.bm: BinaryManager
+        self.manager: TunnelManager
 
     def do_startup(self) -> None:
         # 让 X11 下的 WM_CLASS / Wayland 下的 app_id 与 .desktop 文件名一致，
         # 否则任务栏无法把窗口和应用（及其图标）对应起来；必须在 gtk_init 之前设置
         GLib.set_prgname(APP_ID)
         Adw.Application.do_startup(self)
+        self.config = Config()
+        self.bm = BinaryManager(DATA_DIR / "versions")
+        self.manager = TunnelManager(self.config)
         provider = Gtk.CssProvider()
         if hasattr(provider, "load_from_string"):
             provider.load_from_string(CSS)
