@@ -79,10 +79,17 @@ def make_watcher(*, enabled: bool = True, known=()):
 def watcher_checks():
     checks = []
 
-    # M3：已配置过相同主机名的隧道 -> 直接跳过，不弹确认框
-    w, asked, _ = make_watcher(known={"known-xyz.trycloudflare.com"})
+    # M3：已配置过相同主机名的隧道 -> 直接跳过，不弹确认框，且不消耗 _handled（删除后仍能再问）
+    known_set = {"known-xyz.trycloudflare.com"}
+    w, asked, _ = make_watcher()
+    w._known_hostnames = lambda: known_set
     got = w.consider("https://known-xyz.trycloudflare.com")
-    checks.append((got is None and not asked, "已建过相同主机名的链接不再询问"))
+    checks.append((got is None and not asked and "known-xyz.trycloudflare.com" not in w._handled,
+                   "已建过相同主机名的链接不再询问"))
+    known_set.clear()
+    got_after_delete = w.consider("https://known-xyz.trycloudflare.com")
+    checks.append((got_after_delete == "known-xyz.trycloudflare.com",
+                   "删除已建隧道后同一条链接可再次询问"))
 
     # 未建过的新链接 -> 弹出询问并返回主机名
     w, asked, _ = make_watcher()
