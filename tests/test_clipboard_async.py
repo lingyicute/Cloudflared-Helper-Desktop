@@ -48,3 +48,10 @@ class ClipboardTests(unittest.TestCase):
         self.watcher._window_alive = lambda: False
         self.watcher.consider('https://late.trycloudflare.com')
         self.assertNotIn('late.trycloudflare.com', self.watcher._handled)
+
+    def test_open_editor_respects_enabled_flag(self):
+        accepted = []
+        watcher = QuickTunnelWatcher(None, accepted.append, is_enabled=lambda: False)
+        watcher._window_alive = lambda: True
+        watcher._open_editor('late.trycloudflare.com')
+        self.assertEqual(accepted, [])

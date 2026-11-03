@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 import time
+import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -175,6 +176,11 @@ def main() -> int:
     total = len(SHOULD_MATCH) + len(SHOULD_REJECT) + 2 + len(watcher_results)
     print(f"test_quick_tunnel: {total - failures}/{total} passed")
     return 1 if failures else 0
+
+
+class QuickTunnelTests(unittest.TestCase):
+    def test_all_quick_tunnel_cases(self):
+        self.assertEqual(main(), 0)
 
 
 if __name__ == "__main__":
