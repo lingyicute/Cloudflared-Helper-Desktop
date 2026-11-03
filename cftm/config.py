@@ -51,8 +51,9 @@ if not APP_ICON_FILE.is_file():
             break
 
 def _xdg(env: str, default: str) -> Path:
-    value = os.environ.get(env)
-    return Path(value) if value and value.strip() else Path.home() / default
+    value = (os.environ.get(env) or "").strip()
+    path = Path(value) if value else None
+    return path if path is not None and path.is_absolute() else Path.home() / default
 
 
 CONFIG_DIR = _xdg("XDG_CONFIG_HOME", ".config") / "cloudflared-tunnel-manager"
@@ -103,7 +104,7 @@ class Config:
         backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}")
         # 同一秒内多次发生也不能互相覆盖
         for n in range(1, 100):
-            if not backup.exists():
+            if not backup.exists() and not backup.is_symlink():
                 break
             backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}-{n}")
         try:
