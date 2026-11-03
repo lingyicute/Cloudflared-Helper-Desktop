@@ -101,6 +101,7 @@ class TunnelRow(Adw.ActionRow):
         self.add_suffix(box)
 
         self._hid = proc.connect("state-changed", lambda *_: self.refresh())
+        self.connect("destroy", lambda *_: self.dispose_row())
         self.refresh()
 
     def refresh(self) -> None:
@@ -179,7 +180,9 @@ class MainWindow(Adw.ApplicationWindow):
         self._rows: list[TunnelRow] = []
         self._log_windows: dict[str, LogWindow] = {}
         self._force_close = False
+        self._closing = False
         self._quit_dialog: Optional[Adw.MessageDialog] = None
+        self._delete_dialog: Optional[Adw.MessageDialog] = None
         self._binary_path: Optional[str] = None
         self._probe_generation = 0
 
@@ -201,7 +204,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._rebuild_list()
         self.on_binary_changed()
-        GLib.timeout_add(700, self._autostart)
+        self._autostart_timer: Optional[int] = GLib.timeout_add(700, self._autostart)
 
     # ------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -425,6 +428,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.manager.stop_all()
 
     def _autostart(self) -> bool:
+        self._autostart_timer = None
+        if self._closing:
+            return False
         targets = [p for p in self.manager.procs if p.config.autostart and not p.is_active()]
         if not targets or not self.current_binary():
             return False
@@ -505,6 +511,8 @@ class MainWindow(Adw.ApplicationWindow):
             self.manager.update(cfg)
             if was_active:
                 self.toast("配置已保存，将在下次连接时生效")
+            else:
+                self.toast("配置已保存")
         else:
             self.manager.add(cfg)
             self.toast(f"已添加隧道「{cfg.display_name}」")
@@ -512,6 +520,9 @@ class MainWindow(Adw.ApplicationWindow):
     def _confirm_delete(self, tunnel_id: str) -> None:
         proc = self.manager.get(tunnel_id)
         if proc is None:
+            return
+        if self._delete_dialog is not None:
+            self._delete_dialog.present()
             return
         dlg = Adw.MessageDialog(
             transient_for=self, modal=True, heading=f"删除「{proc.config.display_name}」？",
@@ -522,7 +533,14 @@ class MainWindow(Adw.ApplicationWindow):
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dlg.set_default_response("cancel")
         dlg.set_close_response("cancel")
-        dlg.connect("response", lambda _d, r: r == "delete" and self.manager.remove(tunnel_id))
+
+        def on_response(_d, resp):
+            self._delete_dialog = None
+            if resp == "delete":
+                self.manager.remove(tunnel_id)
+
+        dlg.connect("response", on_response)
+        self._delete_dialog = dlg
         dlg.present()
 
     def _copy_command(self, tunnel_id: str) -> None:
@@ -598,9 +616,14 @@ class MainWindow(Adw.ApplicationWindow):
         self.quick_tunnel.cancel_pending()
         running = len(self.manager.active())
         if running == 0 or self._force_close:
+            self._closing = True
+            if self._autostart_timer is not None:
+                GLib.source_remove(self._autostart_timer)
+                self._autostart_timer = None
             self._save_window_size()
             for win in list(self._log_windows.values()):
                 win.close()
+            self.bm.cancel_all()
             self.manager.stop_all()
             return False
         if self._quit_dialog is not None:
@@ -709,8 +732,11 @@ class Application(Adw.Application):
         return GLib.SOURCE_REMOVE
 
     def do_shutdown(self) -> None:
-        # 退出时强制结束所有隧道，避免 SIGTERM 后 5 秒强制杀的定时器因主循环已退出而不执行
-        self.manager.stop_all(force=True)
+        # 退出时取消后台下载并强制结束所有隧道，避免残留线程和孤儿子进程
+        if hasattr(self, "bm"):
+            self.bm.cancel_all()
+        if hasattr(self, "manager"):
+            self.manager.stop_all(force=True)
         Adw.Application.do_shutdown(self)
 
     def _on_quit(self, *_args) -> None:
