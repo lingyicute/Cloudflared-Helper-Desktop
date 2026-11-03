@@ -69,3 +69,11 @@ class ConfigTests(unittest.TestCase):
         first, second = Config(self.path), Config(self.path)
         first.get('tunnels').append({'name': 'one'})
         self.assertEqual(second.get('tunnels'), [])
+
+    def test_reload_resets_removed_keys_to_defaults(self):
+        cfg = Config(self.path)
+        cfg.set('custom_key', 123)
+        self.path.write_text('{"active_version": "system"}')
+        cfg.load()
+        self.assertNotIn('custom_key', cfg.data)
+        self.assertEqual(cfg.get('active_version'), 'system')

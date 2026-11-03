@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from cftm.desktop_integration import DESKTOP_FILE_NAME, GENERATED_MARK, _quote_exec_arg, install_desktop_file
+from cftm.desktop_integration import DESKTOP_FILE_NAME, GENERATED_MARK, _quote_exec_arg, install_desktop_file, install_icon, system_desktop_file_exists
 
 
 _VALUE_ESCAPES = {"s": " ", "n": "\n", "t": "\t", "r": "\r", "\\": "\\"}
@@ -54,6 +54,15 @@ class QuoteExecArgTests(unittest.TestCase):
                     target.write_bytes(raw)
                     self.assertFalse(install_desktop_file())
                     self.assertEqual(target.read_bytes(), raw)
+
+    def test_system_desktop_check_ignores_user_generated_entry_and_installs_icon_safely(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_home = Path(tmp)
+            with patch.dict("os.environ", {"XDG_DATA_HOME": str(data_home), "XDG_DATA_DIRS": str(data_home)}):
+                self.assertTrue(install_desktop_file())
+                self.assertFalse(system_desktop_file_exists())
+                self.assertTrue(install_icon())
+                self.assertFalse(install_icon())
 
 
 if __name__ == "__main__":
