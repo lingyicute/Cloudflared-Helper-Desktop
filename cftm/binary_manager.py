@@ -146,7 +146,9 @@ class BinaryManager:
         try:
             for staging in self.versions_dir.glob(".install-*"):
                 try:
-                    if not staging.is_symlink() and staging.is_dir():
+                    if staging.is_symlink() or staging.is_file():
+                        staging.unlink(missing_ok=True)
+                    elif staging.is_dir():
                         shutil.rmtree(staging, ignore_errors=True)
                 except OSError:
                     pass
@@ -157,8 +159,8 @@ class BinaryManager:
                 for exe in exe_names:
                     for part in self.versions_dir.glob(f"*/{exe}{suffix}"):
                         try:
-                            if not part.parent.is_symlink() and part.is_file():
-                                part.unlink()
+                            if not part.parent.is_symlink() and (part.is_symlink() or part.is_file()):
+                                part.unlink(missing_ok=True)
                         except OSError:
                             pass
             # 顺手收掉因此变空的版本目录
@@ -354,8 +356,10 @@ class BinaryManager:
             final = self.path_for(tag)
             error = None
             try:
-                if dest_dir.is_symlink():
+                if self.versions_dir.is_symlink() or dest_dir.is_symlink():
                     raise RuntimeError("版本目录不能是符号链接")
+                self.versions_dir.mkdir(parents=True, exist_ok=True)
+                expected_size = size if isinstance(size, int) and not isinstance(size, bool) and size > 0 else 0
                 # 下载与解压都放在独占、私有且同文件系统的目录，避免跟随遗留 .part 链接。
                 with tempfile.TemporaryDirectory(prefix=".install-", dir=self.versions_dir) as staging:
                     tmp = Path(staging) / (self.exe_name + ".part")
@@ -365,9 +369,12 @@ class BinaryManager:
                     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                     with urllib.request.urlopen(req, timeout=30) as resp, open(tmp, "wb") as fh:
                         try:
-                            total = max(int(resp.headers.get("Content-Length") or 0), 0)
+                            content_length = max(int(resp.headers.get("Content-Length") or 0), 0)
                         except (TypeError, ValueError):
-                            total = 0
+                            content_length = 0
+                        if content_length and expected_size and content_length != expected_size:
+                            raise RuntimeError(f"文件大小与发布信息不符（{content_length}/{expected_size} 字节），已丢弃")
+                        total = content_length or expected_size
                         got = 0
                         hasher = hashlib.sha256()
                         started = time.monotonic()
@@ -380,10 +387,10 @@ class BinaryManager:
                             if not chunk:
                                 break
                             got += len(chunk)
-                            if total and got > total:
-                                raise RuntimeError(f"下载不完整（{got}/{total} 字节），请重试")
-                            if size and got > size:
-                                raise RuntimeError(f"文件大小与发布信息不符（{got}/{size} 字节），已丢弃")
+                            if content_length and got > content_length:
+                                raise RuntimeError(f"下载不完整（{got}/{content_length} 字节），请重试")
+                            if expected_size and got > expected_size:
+                                raise RuntimeError(f"文件大小与发布信息不符（{got}/{expected_size} 字节），已丢弃")
                             fh.write(chunk)
                             hasher.update(chunk)
                             now = time.monotonic()
@@ -402,12 +409,12 @@ class BinaryManager:
                         check_cancelled()
                         # 连接被中途切断时 read() 也只是返回空串，必须自己核对字节数，
                         # 否则半截文件会被当成可用的 cloudflared 安装进去。
-                        if total and got != total:
-                            raise RuntimeError(f"下载不完整（{got}/{total} 字节），请重试")
+                        if content_length and got != content_length:
+                            raise RuntimeError(f"下载不完整（{got}/{content_length} 字节），请重试")
                         if got == 0:
                             raise RuntimeError("下载的文件为空，请重试")
-                        if size and got != size:
-                            raise RuntimeError(f"文件大小与发布信息不符（{got}/{size} 字节），已丢弃")
+                        if expected_size and got != expected_size:
+                            raise RuntimeError(f"文件大小与发布信息不符（{got}/{expected_size} 字节），已丢弃")
                         if expected_sha256 and hasher.hexdigest() != expected_sha256:
                             raise RuntimeError("SHA-256 校验失败：文件与 GitHub 发布信息不符，已丢弃")
                         elapsed = max(time.monotonic() - started, 1e-6)
@@ -459,9 +466,20 @@ class BinaryManager:
         if event is not None:
             event.set()
 
+    def cancel_all(self) -> None:
+        for event in list(self._active_downloads.values()):
+            event.set()
+
     def remove(self, tag: str) -> None:
         # 防路径穿越：tag 只能是单级目录名，否则 rmtree 会删到外面去。
         if not _is_safe_tag(tag):
             return
         self.cancel(tag)
-        shutil.rmtree(self.versions_dir / tag, ignore_errors=True)
+        target = self.versions_dir / tag
+        try:
+            if target.is_symlink() or target.is_file():
+                target.unlink(missing_ok=True)
+            elif target.is_dir():
+                shutil.rmtree(target, ignore_errors=True)
+        except OSError:
+            pass
