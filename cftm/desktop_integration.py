@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from .config import APP_ICON_FILE, APP_ID, RESOURCE_DATA_DIR
@@ -98,10 +99,13 @@ def _build_desktop_entry() -> str:
     template = _find_template_desktop()
     lines: list[str] = []
     if template and template.is_file():
-        for line in template.read_text(encoding="utf-8").splitlines():
-            if line.startswith(("Exec=", "StartupWMClass=", "X-CFTM-Generated=")):
-                continue
-            lines.append(line)
+        try:
+            for line in template.read_text(encoding="utf-8").splitlines():
+                if line.startswith(("Exec=", "StartupWMClass=", "X-CFTM-Generated=")):
+                    continue
+                lines.append(line)
+        except (OSError, UnicodeError):
+            lines.clear()
     if not lines:
         lines = [
             "[Desktop Entry]",
@@ -121,17 +125,39 @@ def _build_desktop_entry() -> str:
 
 
 def _write_if_changed(path: Path, content: str) -> bool:
+    tmp: Path | None = None
     try:
-        if path.is_file() and path.read_text(encoding="utf-8") == content:
+        if path.is_symlink():
             return False
+        if path.is_file():
+            try:
+                if path.read_text(encoding="utf-8") == content:
+                    return False
+            except (OSError, UnicodeError):
+                pass
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(content, encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as fh:
+            tmp = Path(fh.name)
+            fh.write(content)
+            fh.flush()
+            try:
+                os.chmod(fh.fileno(), 0o644)
+            except OSError:
+                pass
         tmp.replace(path)
         return True
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         print(f"[desktop] 写入 {path} 失败: {exc}", file=sys.stderr)
         return False
+    finally:
+        if tmp is not None:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def install_icon() -> bool:
@@ -139,6 +165,8 @@ def install_icon() -> bool:
     if not APP_ICON_FILE.is_file():
         return False
     target = _xdg_data_home() / "icons" / "hicolor" / "scalable" / "apps" / APP_ICON_FILE.name
+    if target.is_symlink():
+        return False
     try:
         if target.is_file():
             try:
@@ -162,12 +190,14 @@ def install_icon() -> bool:
 def install_desktop_file() -> bool:
     """在 ~/.local/share/applications 生成（或更新）.desktop 文件。返回是否发生了更新。"""
     target = _xdg_data_home() / "applications" / DESKTOP_FILE_NAME
-    if target.is_file():
+    if target.is_symlink():
+        return False
+    if target.exists():
         try:
             existing = target.read_text(encoding="utf-8")
-        except OSError:
-            existing = ""
-        if existing and GENERATED_MARK not in existing:
+        except (OSError, UnicodeError):
+            return False
+        if GENERATED_MARK not in existing:
             return False  # 用户手工放置的文件，不要动
     return _write_if_changed(target, _build_desktop_entry())
 
