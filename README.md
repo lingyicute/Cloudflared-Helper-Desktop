@@ -49,6 +49,8 @@
 cloudflared access tcp --hostname <隧道主机名> --url <监听地址>:<端口>
 ```
 
+隧道主机名必须是完整域名（如 `ssh.example.com`），cloudflared 不支持 IP 地址；粘贴的 URL 会自动剥掉协议、路径和端口。监听地址不受此限制。
+
 > [!Note]
 > `access tcp` 这个子命令名从 cloudflared `2020.6.1` 起就有了（`2020.5.1` 及更早只有 `access ssh`，
 > 当时还没有 `tcp`）。应用内下载的版本来自官方 Releases 的最新 30 个，全部满足；只有手动把二进制指向
