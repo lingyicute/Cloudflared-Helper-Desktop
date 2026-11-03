@@ -33,6 +33,7 @@ from .tunnel import (  # noqa: E402
     TunnelConfig,
     TunnelManager,
     TunnelProcess,
+    validate_hostname,
 )
 from .versions_page import VersionsPage  # noqa: E402
 
@@ -379,11 +380,12 @@ class MainWindow(Adw.ApplicationWindow):
         proc = self.manager.get(tunnel_id)
         if proc is None or proc.is_active():
             return False
-        # 对话框里拦过了，但手改 config.json 可能留下空 hostname 或含空白/控制字符：这里再兜底，
-        # 否则会拿 --hostname "" 或含空白的值去起进程，cloudflared 报错信息很迷惑。
-        hostname = proc.config.hostname.strip()
-        if not hostname or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in hostname):
-            self.toast(f"「{proc.config.display_name}」的隧道主机名无效，请先编辑修正")
+        # 对话框里拦过了，但手改 config.json 可能留下无效 hostname：这里用与 build_argv
+        # 相同的校验函数兜底，否则 cloudflared 的报错信息会很迷惑。
+        try:
+            validate_hostname(proc.config.hostname)
+        except ValueError as exc:
+            self.toast(f"「{proc.config.display_name}」的隧道主机名无效：{exc}，请先编辑修正")
             return False
         binary = self.current_binary()
         if not binary:

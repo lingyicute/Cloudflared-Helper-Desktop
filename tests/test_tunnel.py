@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from gi.repository import GLib
 from cftm.config import Config
-from cftm.tunnel import STATE_ERROR, STATE_RUNNING, STATE_STARTING, STATE_STOPPED, TunnelConfig, TunnelManager, TunnelProcess
+from cftm.tunnel import STATE_ERROR, STATE_RUNNING, STATE_STARTING, STATE_STOPPED, TunnelConfig, TunnelManager, TunnelProcess, normalize_hostname
 
 
 def wait_until(predicate, timeout=4):
@@ -72,6 +72,24 @@ class TunnelTests(unittest.TestCase):
         self.assertEqual(cfg.id, 'abc')
         self.assertEqual(cfg.port, 21128)
         self.assertEqual(cfg.listen_host, '127.0.0.1')
+
+    def test_normalize_hostname_strips_url_parts_and_rejects_ip(self):
+        for raw, want in [('tcp.example.com', 'tcp.example.com'), (' HTTPS://Tcp.Example.com:8443/a?b#c ', 'Tcp.Example.com'),
+                          ('tcp.example.com.', 'tcp.example.com'), ('a.b1', 'a.b1')]:
+            with self.subTest(raw=raw):
+                self.assertEqual(normalize_hostname(raw), want)
+        for bad in ['', '  ', 'localhost', 'a_b.example.com', '-a.example.com', 'a..b.com', 'a b.example.com',
+                    'user@tcp.example.com', '1.2.3.4', 'https://127.0.0.1:22/', '2130706433', '0x7f.1',
+                    '[::1]', '[::1]:22', '::1', 'fe80::1', ('a' * 64) + '.example.com']:
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    normalize_hostname(bad)
+                with self.assertRaises(ValueError):
+                    TunnelConfig(hostname=bad).build_argv('cloudflared')
+
+    def test_from_dict_migrates_url_hostnames(self):
+        self.assertEqual(TunnelConfig.from_dict({'hostname': 'https://ssh.example.com/'}).hostname, 'ssh.example.com')
+        self.assertEqual(TunnelConfig.from_dict({'hostname': '1.2.3.4'}).hostname, '1.2.3.4')
 
     def test_invalid_arguments_are_rejected_before_spawn(self):
         for field, value in [('hostname', 'tcp\texample.com'), ('hostname', 'tcp\x00.example.com'),

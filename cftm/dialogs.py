@@ -10,7 +10,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
-from .tunnel import STATE_LABELS, TunnelConfig, TunnelProcess  # noqa: E402
+from .tunnel import STATE_LABELS, TunnelConfig, TunnelProcess, normalize_hostname  # noqa: E402
 
 
 def _escape_shortcut(window: Gtk.Window) -> None:
@@ -210,12 +210,14 @@ class TunnelDialog(Adw.Window):
         self.toasts.add_toast(Adw.Toast.new(message))
 
     def _on_save_clicked(self, *_args) -> None:
-        hostname = self.host_row.get_text().strip()
-        # 更严格的主机名校验：不能为空、不能含任何空白字符
-        if not hostname or any(c.isspace() for c in hostname):
-            self._toast("请输入有效的隧道主机名（不能包含空格）")
+        # 与 build_argv / start_tunnel 共用同一套校验；粘贴的 URL 会自动剥掉协议和路径
+        try:
+            hostname = normalize_hostname(self.host_row.get_text())
+        except ValueError as exc:
+            self._toast(f"请输入有效的隧道主机名：{exc}")
             self.host_row.grab_focus()
             return
+        self.host_row.set_text(hostname)
         port = int(self.port_row.get_value())
         if not 1 <= port <= 65535:
             self._toast("端口必须在 1 到 65535 之间")

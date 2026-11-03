@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 import shlex
 import signal
 import time
@@ -26,6 +27,46 @@ STATE_LABELS = {
     STATE_RUNNING: "已连接",
     STATE_ERROR: "连接失败",
 }
+
+_HOST_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+_HOSTNAME_RE = re.compile(rf"{_HOST_LABEL}(?:\.{_HOST_LABEL})+")
+_IPV6_CHARS_RE = re.compile(r"[0-9A-Fa-f:.]+")
+_NUMERIC_LABEL_RE = re.compile(r"[0-9]+|0[xX][0-9A-Fa-f]*")
+_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+_HOSTNAME_IP_MSG = "cloudflared 不支持 IP 地址，请使用域名"
+_HOSTNAME_FORM_MSG = "需为完整域名（如 ssh.example.com），不含协议、路径或端口"
+
+
+def normalize_hostname(raw: object) -> str:
+    """把用户输入整理成隧道主机名；无效时抛 ValueError。
+
+    规则与 cf-helper.sh 一致：RFC 1123（标签 1-63 字符、总长不超过 253、不含下划线）、
+    至少两段；自动剥离 scheme、路径/查询/片段、:port 与末尾点号。
+    cloudflared 不支持 IP 地址，IPv4/IPv6 及其数字变体一律拒绝。
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("隧道主机名不能为空")
+    host = _SCHEME_RE.sub("", raw.strip(), count=1)
+    host = re.split(r"[/?#]", host, maxsplit=1)[0]
+    if host.startswith("[") or (host.count(":") >= 2 and _IPV6_CHARS_RE.fullmatch(host)):
+        raise ValueError(_HOSTNAME_IP_MSG)
+    host = re.sub(r"^(.+):[0-9]+$", r"\1", host)
+    if host.endswith("."):
+        host = host[:-1]
+    if _NUMERIC_LABEL_RE.fullmatch(host.rsplit(".", 1)[-1]):
+        raise ValueError(_HOSTNAME_IP_MSG)
+    if len(host) > 253 or not _HOSTNAME_RE.fullmatch(host):
+        raise ValueError(_HOSTNAME_FORM_MSG)
+    return host
+
+
+def validate_hostname(hostname: object) -> str:
+    """严格校验已保存的主机名（必须已是规范形式），build_argv 与界面预检共用。"""
+    host = normalize_hostname(hostname)
+    if host != hostname:
+        raise ValueError(_HOSTNAME_FORM_MSG)
+    return host
+
 
 def listener_address(host: str, port: int) -> str:
     """生成 host:port，IPv6 字面量必须加方括号；不接受 URL 或内嵌端口。"""
@@ -92,6 +133,13 @@ class TunnelConfig:
         cfg.autostart = bool(cfg.autostart)
         # 额外清理：hostname 和 listen_host 去除首尾空白，避免后续校验遗漏
         cfg.hostname = cfg.hostname.strip()
+        # 旧版本允许保存 URL 形式（https://host/path）的主机名，升级后自动整理成纯域名，
+        # 否则这些隧道会因 build_argv 的严格校验而全部无法启动；整理不了的保持原样，启动时报错。
+        if cfg.hostname:
+            try:
+                cfg.hostname = normalize_hostname(cfg.hostname)
+            except ValueError:
+                pass
         cfg.listen_host = cfg.listen_host.strip() or "127.0.0.1"
         return cfg
 
@@ -106,13 +154,10 @@ class TunnelConfig:
     # 别名，四个子命令共用一个 Action），--url 的 scheme 也只影响缺省值不影响行为，
     # 所以这里固定用 tcp，不必再把“协议类型”存进配置。
     def build_argv(self, binary: str) -> list[str]:
-        if (
-            not isinstance(self.hostname, str)
-            or not self.hostname
-            or self.hostname.startswith("-")
-            or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c in "/?#@\\" for c in self.hostname)
-        ):
-            raise ValueError("无效的隧道主机名")
+        try:
+            validate_hostname(self.hostname)
+        except ValueError as exc:
+            raise ValueError(f"无效的隧道主机名：{exc}") from exc
         argv = [
             binary,
             "access",
