@@ -216,6 +216,45 @@ class BinaryTests(unittest.TestCase):
         self.assertIsNone(done[-1])
         self.assertFalse(self.bm.is_downloading(self.tag))
 
+    def test_queued_progress_still_sees_stats_before_done_callback(self):
+        idle_queue = []
+        seen_stats = []
+        done = []
+        with patch('cftm.binary_manager.threading.Thread', InlineThread), \
+             patch('cftm.binary_manager.urllib.request.urlopen', return_value=Response(b'ok', length=2)), \
+             patch('cftm.binary_manager.GLib.idle_add', side_effect=lambda cb, *a: idle_queue.append((cb, a))):
+            self.bm.download(
+                self.tag,
+                lambda tag, _f: seen_stats.append(self.bm.download_stats(tag)),
+                lambda tag, err: done.append((tag, err)),
+            )
+            self.assertTrue(self.bm.is_downloading(self.tag))
+            while idle_queue:
+                cb, args = idle_queue.pop(0)
+                cb(*args)
+        self.assertTrue(seen_stats)
+        self.assertTrue(all(s is not None and s['got'] == 2 for s in seen_stats))
+        self.assertEqual(done, [(self.tag, None)])
+        self.assertFalse(self.bm.is_downloading(self.tag))
+
+    def test_probe_version_ignores_nonzero_exit_and_extracts_version(self):
+        bad = Path(self.tmp.name) / 'bad-cf'
+        bad.write_text('#!/bin/sh\necho "GLIBC_2.38: version 9.9.9 not found" >&2\nexit 1\n')
+        bad.chmod(0o755)
+        self.assertIsNone(BinaryManager.probe_version(str(bad)))
+
+        good = Path(self.tmp.name) / 'good-cf'
+        good.write_text('#!/bin/sh\necho "cloudflared version 2026.2.0 (built 2026-02-01)"\n')
+        good.chmod(0o755)
+        self.assertEqual(BinaryManager.probe_version(str(good)), '2026.2.0')
+
+    def test_clean_stale_parts_removes_leftover_staging_dirs(self):
+        staging = self.bm.versions_dir / '.install-stale'
+        staging.mkdir()
+        (staging / 'unexpected.tmp').write_bytes(b'leftover')
+        BinaryManager(self.bm.versions_dir)
+        self.assertFalse(staging.exists())
+
 
 class FormatSizeTests(unittest.TestCase):
     def test_units_roll_over_at_the_displayed_value(self):
