@@ -1894,6 +1894,22 @@ function seedData() {
   t3.lastError = 'Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared';
 }
 function logAt(d, text) { return '[' + hhmmss(d) + '] ' + text; }
+// 与 cftm/tunnel.py 的 normalize_hostname 保持一致：RFC 1123、至少两段、剥离 URL 外壳、拒绝 IP 地址
+function normalizeHostname(raw) {
+  var ipMsg = 'cloudflared 不支持 IP 地址，请使用域名';
+  var v = String(raw == null ? '' : raw).trim();
+  if (!v) return { error: '隧道主机名不能为空' };
+  var s = v.replace(/^[A-Za-z][A-Za-z0-9+.\-]*:\/\//, '').split(/[\/?#]/)[0];
+  if (s.charAt(0) === '[' || (s.split(':').length > 2 && /^[0-9A-Fa-f:.]+$/.test(s))) return { error: ipMsg };
+  s = s.replace(/^(.+):[0-9]+$/, '$1');
+  if (s.charAt(s.length - 1) === '.') s = s.slice(0, -1);
+  if (/^(?:[0-9]+|0[xX][0-9A-Fa-f]*)$/.test(s.slice(s.lastIndexOf('.') + 1))) return { error: ipMsg };
+  var label = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
+  if (s.length > 253 || !new RegExp('^' + label + '(?:\\.' + label + ')+$').test(s)) {
+    return { error: '需为完整域名（如 ssh.example.com），不含协议、路径或端口' };
+  }
+  return { host: s };
+}
 function displayName(t) { return (t.name || '').trim() || t.hostname || '未命名隧道'; }
 function isActive(t) { return t.state === 'running' || t.state === 'starting'; }
 function find(id) { return tunnels.filter(function (t) { return t.id === id; })[0] || null; }
@@ -2079,7 +2095,8 @@ function startTunnel(id) {
   var t = find(id);
   if (!t || isActive(t)) return false;
   var host = (t.hostname || '').trim();
-  if (!host || host.charAt(0) === '-' || /[\s\x00-\x1f\x7f/?#@\\]/.test(host)) { toast('「' + displayName(t) + '」的隧道主机名无效，请先编辑修正'); return false; }
+  var hv = normalizeHostname(host);
+  if (hv.error || hv.host !== host) { toast('「' + displayName(t) + '」的隧道主机名无效：' + (hv.error || '需为完整域名（如 ssh.example.com），不含协议、路径或端口') + '，请先编辑修正'); return false; }
   var bin = currentBinary();
   if (!bin) {
     toast('未找到 cloudflared，请先在“版本管理”中安装');
@@ -2523,11 +2540,14 @@ function openTunnelDialog(cfg, isNew, focusPort, onClose) {
   sw.addEventListener('click', function () { sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); });
 
   function save() {
-    var name = q('name').value.trim(), host = q('hostname').value.trim();
-    if (!host || host.charAt(0) === '-' || /[\s/?#@\\]/.test(host)) {
-      dialogToast(node, '请输入有效的隧道主机名（不能包含空格）');
+    var name = q('name').value.trim();
+    var hv = normalizeHostname(q('hostname').value);
+    if (hv.error) {
+      dialogToast(node, '请输入有效的隧道主机名：' + hv.error);
       q('hostname').focus(); return;
     }
+    var host = hv.host;
+    q('hostname').value = host;
     var port = parseInt(portInput.value, 10);
     if (!(port >= 1 && port <= 65535)) { dialogToast(node, '端口必须在 1 到 65535 之间'); portInput.focus(); return; }
     var extra = q('extra').value.trim();
