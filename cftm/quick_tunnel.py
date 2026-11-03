@@ -218,10 +218,11 @@ class QuickTunnelWatcher:
             return None
         if not self._window_alive():
             return None
-        self._handled.add(host)
         if host in self._known_hostnames():
-            # 这条隧道已经建过了（快速隧道的子域是随机且唯一的），不再打扰
+            # 这条隧道已经建过了（快速隧道的子域是随机且唯一的），不再打扰；
+            # 但不记入 _handled，以免用户本会话删除该隧道后无法再通过剪贴板重建。
             return None
+        self._handled.add(host)
         self._ask(host)
         return host
 
