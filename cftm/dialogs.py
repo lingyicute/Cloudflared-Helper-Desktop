@@ -300,6 +300,11 @@ class LogWindow(Adw.Window):
         self._hid_state = proc.connect("state-changed", lambda *_: self._update_subtitle())
         self.connect("close-request", self._on_close)
 
+    def refresh_title(self) -> None:
+        name = self.proc.config.display_name
+        self.set_title(f"日志 · {name}")
+        self.title_widget.set_title(name)
+
     def _update_subtitle(self) -> None:
         self.title_widget.set_subtitle(STATE_LABELS.get(self.proc.state, self.proc.state))
 
@@ -339,6 +344,10 @@ class LogWindow(Adw.Window):
         self.buffer.set_text("")
 
     def _on_close(self, *_args) -> bool:
-        self.proc.disconnect(self._hid_log)
-        self.proc.disconnect(self._hid_state)
+        if self._hid_log:
+            self.proc.disconnect(self._hid_log)
+            self._hid_log = 0
+        if self._hid_state:
+            self.proc.disconnect(self._hid_state)
+            self._hid_state = 0
         return False
