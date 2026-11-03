@@ -106,12 +106,16 @@ class TunnelDialog(Adw.Window):
         is_new: Optional[bool] = None,
         focus_port: bool = False,
     ):
-        super().__init__(transient_for=parent, modal=True, default_width=540, default_height=560)
+        super().__init__(
+            transient_for=parent, modal=True, destroy_with_parent=True,
+            default_width=540, default_height=560,
+        )
         self.is_new = (config is None) if is_new is None else bool(is_new)
         self.cfg = config or TunnelConfig()
         self.on_save = on_save
         self.set_title("新建隧道" if self.is_new else "编辑隧道")
         _escape_shortcut(self)
+        _quit_shortcut(self, parent)
 
         view = Adw.ToolbarView()
         header = Adw.HeaderBar(show_start_title_buttons=False, show_end_title_buttons=False)
