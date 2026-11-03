@@ -96,6 +96,7 @@ class VersionsPage(Adw.PreferencesPage):
         self._suppress_select = False
         self.latest_tag: Optional[str] = None
         self._install_after_fetch = False
+        self._delete_dialog: Optional[Adw.MessageDialog] = None
 
         # ---------- 当前使用
         self.g_current = Adw.PreferencesGroup(
@@ -232,6 +233,9 @@ class VersionsPage(Adw.PreferencesPage):
         self.win.on_binary_changed()
 
     def _confirm_delete(self, tag: str) -> None:
+        if self._delete_dialog is not None:
+            self._delete_dialog.present()
+            return
         dlg = Adw.MessageDialog(
             transient_for=self.win, modal=True, heading=f"删除 cloudflared {tag}？",
             body="正在使用此版本运行的隧道不会被中断，但之后将无法再用它启动。",
@@ -243,6 +247,7 @@ class VersionsPage(Adw.PreferencesPage):
         dlg.set_close_response("cancel")
 
         def on_response(_d, resp):
+            self._delete_dialog = None
             if resp != "delete":
                 return
             self.bm.remove(tag)
@@ -255,6 +260,7 @@ class VersionsPage(Adw.PreferencesPage):
             self.win.toast(f"已删除 cloudflared {tag}")
 
         dlg.connect("response", on_response)
+        self._delete_dialog = dlg
         dlg.present()
 
     def _open_dir(self, *_args) -> None:
@@ -299,6 +305,8 @@ class VersionsPage(Adw.PreferencesPage):
         self.bm.fetch_releases(self._on_releases)
 
     def _on_releases(self, releases: Optional[list], error: Optional[str]) -> None:
+        if getattr(self.win, "_closing", False) is True:
+            return
         try:
             self.refresh_btn.set_sensitive(True)
             self.spinner.stop()
@@ -318,8 +326,10 @@ class VersionsPage(Adw.PreferencesPage):
             return
         self._clear_release_widgets()
         self._releases = {r["tag"]: r for r in releases}
-        self.latest_tag = next(
-            (r["tag"] for r in releases if r["has_asset"] and not r["prerelease"]), None
+        self.latest_tag = max(
+            (r["tag"] for r in releases if r["has_asset"] and not r["prerelease"]),
+            key=version_key,
+            default=None,
         )
         for rel in releases:
             row = ReleaseRow(self, rel)
@@ -385,13 +395,15 @@ class VersionsPage(Adw.PreferencesPage):
         )
 
     def _on_progress(self, tag: str, fraction: float) -> None:
-        if not self.bm.is_downloading(tag):
+        if getattr(self.win, "_closing", False) is True or not self.bm.is_downloading(tag):
             return
         row = self._release_rows.get(tag)
         if row:
             row.set_progress(fraction)
 
     def _on_done(self, tag: str, error: Optional[str]) -> None:
+        if getattr(self.win, "_closing", False) is True:
+            return
         if error:
             if error == "已取消":
                 self.win.toast(f"已取消安装 {tag}")
