@@ -75,7 +75,9 @@ class TunnelTests(unittest.TestCase):
 
     def test_invalid_arguments_are_rejected_before_spawn(self):
         for field, value in [('hostname', 'tcp\texample.com'), ('hostname', 'tcp\x00.example.com'),
+                             ('hostname', '-flag.example.com'), ('hostname', 'https://tcp.example.com/path'),
                              ('listen_host', 'http://localhost'), ('listen_host', '[::1'),
+                             ('listen_host', '-127.0.0.1'),
                              ('listen_host', 'localhost:8080'), ('extra_args', '--token a\x00b')]:
             cfg = TunnelConfig(hostname='tcp.example.com')
             setattr(cfg, field, value)
@@ -194,8 +196,8 @@ class TunnelTests(unittest.TestCase):
             with patch('cftm.tunnel.GLib.timeout_add_seconds') as timer:
                 proc.stop()
                 proc.stop()
-                self.assertEqual(sum('正在断开' in line for line in proc.log_lines()), 1)
                 proc.stop(force=True)
+                self.assertEqual(sum('正在断开' in line for line in proc.log_lines()), 1)
             child.send_signal.assert_called_once()
             child.force_exit.assert_called_once()
             timer.assert_called_once()
