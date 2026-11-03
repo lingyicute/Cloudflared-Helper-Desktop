@@ -388,7 +388,7 @@ class BinaryManager:
                                 break
                             got += len(chunk)
                             if content_length and got > content_length:
-                                raise RuntimeError(f"下载不完整（{got}/{content_length} 字节），请重试")
+                                raise RuntimeError(f"下载数据超出声明长度（{got}/{content_length} 字节），请重试")
                             if expected_size and got > expected_size:
                                 raise RuntimeError(f"文件大小与发布信息不符（{got}/{expected_size} 字节），已丢弃")
                             fh.write(chunk)
