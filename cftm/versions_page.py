@@ -286,6 +286,8 @@ class VersionsPage(Adw.PreferencesPage):
         self._release_widgets.append(row)
 
     def refresh_releases(self) -> None:
+        if not self.refresh_btn.get_sensitive():
+            return
         self.refresh_btn.set_sensitive(False)
         self.spinner.set_visible(True)
         self.spinner.start()
@@ -299,7 +301,10 @@ class VersionsPage(Adw.PreferencesPage):
         except Exception:
             pass
         if error or not releases:
+            self._releases.clear()
+            self.latest_tag = None
             try:
+                self.g_releases.set_description("来源：cloudflare/cloudflared 官方仓库")
                 self._set_release_placeholder(f"获取失败：{error or '返回为空'}", "dialog-error-symbolic")
                 self.win.toast("获取 GitHub 版本列表失败")
             except Exception:
@@ -337,7 +342,13 @@ class VersionsPage(Adw.PreferencesPage):
 
     def _sync_release_rows(self) -> None:
         for tag, row in self._release_rows.items():
-            if not self.bm.is_downloading(tag):
+            if self.bm.is_downloading(tag):
+                if row.stack.get_visible_child_name() != "progress":
+                    stats = self.bm.download_stats(tag) or {}
+                    got = stats.get("got", 0)
+                    total = stats.get("total", 0)
+                    row.set_progress((got / total) if total else (-1.0 if got else 0.0))
+            else:
                 row.set_installed(self.bm.is_installed(tag))
 
     def install_latest(self) -> None:
