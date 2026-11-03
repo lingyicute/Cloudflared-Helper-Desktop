@@ -77,3 +77,20 @@ class ConfigTests(unittest.TestCase):
         cfg.load()
         self.assertNotIn('custom_key', cfg.data)
         self.assertEqual(cfg.get('active_version'), 'system')
+
+    def test_xdg_ignores_relative_paths_and_strips_whitespace(self):
+        from cftm.config import _xdg
+        with patch.dict('os.environ', {'XDG_CONFIG_HOME': 'relative/path'}):
+            self.assertEqual(_xdg('XDG_CONFIG_HOME', '.config'), Path.home() / '.config')
+        with patch.dict('os.environ', {'XDG_CONFIG_HOME': f'  {self.tmp.name}  '}):
+            self.assertEqual(_xdg('XDG_CONFIG_HOME', '.config'), Path(self.tmp.name))
+
+    def test_set_aside_skips_dangling_symlink_backup(self):
+        with patch('cftm.config.time.strftime', return_value='20260101-000000'):
+            dangling = self.path.with_name('config.json.corrupt-20260101-000000')
+            dangling.symlink_to(self.path.parent / 'missing-target')
+            self.path.write_bytes(b'{bad')
+            Config(self.path)
+            numbered = self.path.with_name('config.json.corrupt-20260101-000000-1')
+            self.assertTrue(dangling.is_symlink())
+            self.assertEqual(numbered.read_bytes(), b'{bad')

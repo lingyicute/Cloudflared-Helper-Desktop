@@ -26,16 +26,16 @@ GENERATED_MARK = "X-CFTM-Generated=true"
 
 
 def _xdg_data_home() -> Path:
-    value = os.environ.get("XDG_DATA_HOME")
-    if not value or not value.strip():
-        return Path.home() / ".local" / "share"
-    return Path(value)
+    value = (os.environ.get("XDG_DATA_HOME") or "").strip()
+    path = Path(value) if value else None
+    return path if path is not None and path.is_absolute() else Path.home() / ".local" / "share"
 
 
 def _xdg_data_dirs() -> list[Path]:
     value = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
-    # 过滤空字符串，避免 Path("") 产生 "."
-    return [Path(p) for p in value.split(":") if p and p.strip()]
+    # 按 XDG 规范忽略空项和相对路径；全部无效时回退默认值
+    dirs = [Path(p.strip()) for p in value.split(":") if p and p.strip() and Path(p.strip()).is_absolute()]
+    return dirs or [Path("/usr/local/share"), Path("/usr/share")]
 
 
 def in_flatpak() -> bool:
@@ -119,11 +119,15 @@ def _build_desktop_entry() -> str:
     if template and template.is_file():
         try:
             for line in template.read_text(encoding="utf-8").splitlines():
+                if line.startswith("[") and line.strip() != "[Desktop Entry]":
+                    break
                 if line.startswith(("Exec=", "StartupWMClass=", "X-CFTM-Generated=")):
                     continue
                 lines.append(line)
         except (OSError, UnicodeError):
             lines.clear()
+    if not any(line.strip() == "[Desktop Entry]" for line in lines):
+        lines.clear()
     if not lines:
         lines = [
             "[Desktop Entry]",
@@ -145,7 +149,7 @@ def _build_desktop_entry() -> str:
 def _write_if_changed(path: Path, content: str) -> bool:
     tmp: Path | None = None
     try:
-        if path.is_symlink():
+        if path.is_symlink() or (path.exists() and not path.is_file()):
             return False
         if path.is_file():
             try:
@@ -161,6 +165,7 @@ def _write_if_changed(path: Path, content: str) -> bool:
             tmp = Path(fh.name)
             fh.write(content)
             fh.flush()
+            os.fsync(fh.fileno())
             try:
                 os.chmod(fh.fileno(), 0o644)
             except OSError:
@@ -183,7 +188,7 @@ def install_icon() -> bool:
     if not APP_ICON_FILE.is_file():
         return False
     target = _xdg_data_home() / "icons" / "hicolor" / "scalable" / "apps" / APP_ICON_FILE.name
-    if target.is_symlink():
+    if target.is_symlink() or (target.exists() and not target.is_file()):
         return False
     tmp: Path | None = None
     try:
@@ -202,6 +207,7 @@ def install_icon() -> bool:
             tmp = Path(fh.name)
             fh.write(source_bytes)
             fh.flush()
+            os.fsync(fh.fileno())
             try:
                 os.chmod(fh.fileno(), 0o644)
             except OSError:

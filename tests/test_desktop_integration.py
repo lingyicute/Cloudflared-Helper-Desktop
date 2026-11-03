@@ -64,6 +64,19 @@ class QuoteExecArgTests(unittest.TestCase):
                 self.assertTrue(install_icon())
                 self.assertFalse(install_icon())
 
+    def test_xdg_helpers_ignore_relative_paths_and_keep_exec_in_desktop_entry(self):
+        from cftm.desktop_integration import _build_desktop_entry, _xdg_data_dirs, _xdg_data_home
+        with patch.dict("os.environ", {"XDG_DATA_HOME": "relative/data", "XDG_DATA_DIRS": "rel/one: :rel/two"}):
+            self.assertEqual(_xdg_data_home(), Path.home() / ".local" / "share")
+            self.assertEqual(_xdg_data_dirs(), [Path("/usr/local/share"), Path("/usr/share")])
+        with tempfile.TemporaryDirectory() as tmp:
+            tpl = Path(tmp) / DESKTOP_FILE_NAME
+            tpl.write_text("[Desktop Entry]\nName=App\n[Desktop Action extra]\nName=Extra\n", encoding="utf-8")
+            with patch("cftm.desktop_integration._find_template_desktop", return_value=tpl):
+                built = _build_desktop_entry()
+            self.assertNotIn("[Desktop Action extra]", built)
+            self.assertIn("Exec=", built)
+
 
 if __name__ == "__main__":
     unittest.main()
