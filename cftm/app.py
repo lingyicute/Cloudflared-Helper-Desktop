@@ -140,7 +140,9 @@ class TunnelRow(Adw.ActionRow):
             self.win.start_tunnel(self.proc.config.id)
 
     def dispose_row(self) -> None:
-        self.proc.disconnect(self._hid)
+        if self._hid:
+            self.proc.disconnect(self._hid)
+            self._hid = 0
 
 
 def _window_size(raw) -> tuple[int, int]:
@@ -154,8 +156,11 @@ def _window_size(raw) -> tuple[int, int]:
         raw = {}
 
     def pick(key: str, fallback: int) -> int:
+        item = raw.get(key, fallback)
+        if isinstance(item, bool):
+            return fallback
         try:
-            value = int(raw.get(key, fallback))
+            value = int(item)
         except (TypeError, ValueError, OverflowError):
             # OverflowError：config 里写了 Infinity（json 允许解析为 inf），
             # int(inf) 会抛 OverflowError 而非 ValueError，必须接住。
@@ -314,6 +319,8 @@ class MainWindow(Adw.ApplicationWindow):
         for tunnel_id in [t for t in self._log_windows if t not in alive]:
             win = self._log_windows.pop(tunnel_id)
             win.close()
+        for win in self._log_windows.values():
+            win.refresh_title()
 
     def _rebuild_list(self) -> None:
         self._prune_log_windows()
