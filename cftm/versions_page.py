@@ -109,7 +109,7 @@ class VersionsPage(Adw.PreferencesPage):
             icon_name="view-refresh-symbolic", css_classes=["flat"], valign=Gtk.Align.CENTER,
             tooltip_text="重新检测",
         )
-        refresh_cur.connect("clicked", lambda *_: self.win.on_binary_changed())
+        refresh_cur.connect("clicked", lambda *_: self.refresh_current())
         self.current_row.add_suffix(refresh_cur)
         self.g_current.add(self.current_row)
         self.add(self.g_current)
@@ -146,6 +146,11 @@ class VersionsPage(Adw.PreferencesPage):
         self._rebuild_installed()
 
     # ------------------------------------------------------------ 当前
+    def refresh_current(self) -> None:
+        self._rebuild_installed()
+        self._sync_release_rows()
+        self.win.on_binary_changed()
+
     def set_current(self, version: Optional[str], path: Optional[str]) -> None:
         if path:
             self.current_row.set_title(f"cloudflared {version or '(版本未知)'}")
@@ -228,7 +233,7 @@ class VersionsPage(Adw.PreferencesPage):
 
     def _confirm_delete(self, tag: str) -> None:
         dlg = Adw.MessageDialog(
-            transient_for=self.win, heading=f"删除 cloudflared {tag}？",
+            transient_for=self.win, modal=True, heading=f"删除 cloudflared {tag}？",
             body="正在使用此版本运行的隧道不会被中断，但之后将无法再用它启动。",
         )
         dlg.add_response("cancel", "取消")
@@ -352,6 +357,10 @@ class VersionsPage(Adw.PreferencesPage):
                 row.set_installed(self.bm.is_installed(tag))
 
     def install_latest(self) -> None:
+        # 列表正在刷新中时等待本次刷新完成，不用旧的 latest_tag 或重复触发 fetch
+        if not self.refresh_btn.get_sensitive():
+            self._install_after_fetch = True
+            return
         if self.latest_tag:
             if self.bm.is_installed(self.latest_tag):
                 self.win.toast(f"最新版 {self.latest_tag} 已安装")
@@ -360,10 +369,6 @@ class VersionsPage(Adw.PreferencesPage):
             else:
                 self.download(self.latest_tag)
         else:
-            # 列表正在刷新中时不要重复触发 fetch（按钮已禁用即为刷新中）
-            if not self.refresh_btn.get_sensitive():
-                self._install_after_fetch = True
-                return
             self._install_after_fetch = True
             self.refresh_releases()
 
@@ -380,6 +385,8 @@ class VersionsPage(Adw.PreferencesPage):
         )
 
     def _on_progress(self, tag: str, fraction: float) -> None:
+        if not self.bm.is_downloading(tag):
+            return
         row = self._release_rows.get(tag)
         if row:
             row.set_progress(fraction)
