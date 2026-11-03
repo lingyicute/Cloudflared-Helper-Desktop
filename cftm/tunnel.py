@@ -72,10 +72,15 @@ class TunnelConfig:
         # 重复 id 会让 get() 永远只命中第一条（编辑/删除作用到别的隧道）。
         if not isinstance(cfg.id, str) or not cfg.id.strip():
             cfg.id = uuid.uuid4().hex[:10]
-        try:
-            cfg.port = int(cfg.port)
-        except (TypeError, ValueError, OverflowError):
+        else:
+            cfg.id = cfg.id.strip()
+        if isinstance(cfg.port, bool):
             cfg.port = 21128
+        else:
+            try:
+                cfg.port = int(cfg.port)
+            except (TypeError, ValueError, OverflowError):
+                cfg.port = 21128
         if not 1 <= cfg.port <= 65535:
             cfg.port = 21128
         for str_field in ("name", "hostname", "listen_host", "extra_args"):
@@ -85,7 +90,7 @@ class TunnelConfig:
         cfg.autostart = bool(cfg.autostart)
         # 额外清理：hostname 和 listen_host 去除首尾空白，避免后续校验遗漏
         cfg.hostname = cfg.hostname.strip()
-        cfg.listen_host = cfg.listen_host.strip()
+        cfg.listen_host = cfg.listen_host.strip() or "127.0.0.1"
         return cfg
 
     def copy(self) -> "TunnelConfig":
@@ -130,15 +135,17 @@ class TunnelConfig:
         try:
             argv = self.build_argv(binary)
         except ValueError:
-            # 复制命令行时不应崩溃：退化为把整段 extra_args 当作一个参数引用起来，
-            # 用户粘贴后能看到问题所在。
+            # 复制命令行时不应崩溃：extra_args 若合法仍按参数切分，仅在引号不配对时整段保留。
             argv = [
                 binary, "access", "tcp",
                 "--hostname", self.hostname,
                 "--url", self.listen_label,
             ]
-            if self.extra_args:
-                argv.append(self.extra_args)
+            if isinstance(self.extra_args, str) and self.extra_args.strip():
+                try:
+                    argv += shlex.split(self.extra_args)
+                except ValueError:
+                    argv.append(self.extra_args)
         return " ".join(shlex.quote(a) for a in argv)
 
 
@@ -168,6 +175,8 @@ class TunnelProcess(GObject.Object):
         self._stopping = False
         # 普通 stop() 挂上的 5 秒强杀定时器；force 升级或进程退出时要摘掉
         self._kill_timer: Optional[int] = None
+        self._promote_timer: Optional[int] = None
+        self._exit_timer: Optional[int] = None
         # 进程已退出、但管道里可能还压着没读完的输出时，记下退出码，等 EOF 再收尾
         self._pending_exit: Optional[int] = None
         self._eof = False
@@ -245,7 +254,8 @@ class TunnelProcess(GObject.Object):
         self._stream = proc.get_stdout_pipe()
         self._read_next(self._stream)
         proc.wait_async(None, self._on_exit)
-        GLib.timeout_add(2500, self._promote_running, proc)
+        self._cancel_promote_timer()
+        self._promote_timer = GLib.timeout_add(2500, self._promote_running, proc)
 
     def stop(self, force: bool = False) -> None:
         proc = self._proc
@@ -276,6 +286,16 @@ class TunnelProcess(GObject.Object):
             GLib.source_remove(self._kill_timer)
             self._kill_timer = None
 
+    def _cancel_promote_timer(self) -> None:
+        if self._promote_timer is not None:
+            GLib.source_remove(self._promote_timer)
+            self._promote_timer = None
+
+    def _cancel_exit_timer(self) -> None:
+        if self._exit_timer is not None:
+            GLib.source_remove(self._exit_timer)
+            self._exit_timer = None
+
     # ------------------------------------------------------------ 回调
     def _force_kill(self, proc: Gio.Subprocess) -> bool:
         self._kill_timer = None
@@ -285,6 +305,7 @@ class TunnelProcess(GObject.Object):
         return False
 
     def _promote_running(self, proc: Gio.Subprocess) -> bool:
+        self._promote_timer = None
         # 用户在这 2.5 秒里点了断开时不要再报“已连接”，否则会弹出一条反直觉的提示
         if (self._proc is proc and self.state == STATE_STARTING
                 and not self._stopping and self._pending_exit is None):
@@ -311,7 +332,13 @@ class TunnelProcess(GObject.Object):
             "start websocket listener" in low or "listening on" in low
         ):
             self._set_state(STATE_RUNNING)
-        if " err " in f" {low} " or "level=error" in low or low.lstrip().startswith("error"):
+        if (
+            " err " in f" {low} "
+            or " ftl " in f" {low} "
+            or "level=error" in low
+            or "level=fatal" in low
+            or low.lstrip().startswith(("error", "fatal", "incorrect usage"))
+        ):
             self.last_error = text
 
     def _on_read(self, stream: Gio.InputStream, result, _data) -> None:
@@ -353,7 +380,8 @@ class TunnelProcess(GObject.Object):
             # 管道里可能还压着没读完的输出，等 _on_read 读到 EOF 再改状态；
             # 万一写入端被子进程的后代长期持有，兜底定时器负责收尾。
             self._pending_exit = code
-            GLib.timeout_add(2000, self._finish_exit_fallback, proc)
+            self._cancel_exit_timer()
+            self._exit_timer = GLib.timeout_add(2000, self._finish_exit_fallback, proc)
         else:
             self._finish_exit(code)
 
@@ -363,6 +391,7 @@ class TunnelProcess(GObject.Object):
         不带 proc 直接挂 ``_finish_exit`` 的话，用户在 2 秒内断开又重连、新进程也很快
         退出时，旧定时器会把新进程的 ``_pending_exit`` 提前消费掉，新进程最后几行日志丢失。
         """
+        self._exit_timer = None
         if self._proc is proc and self._pending_exit is not None:
             self._finish_exit()
         return False
@@ -376,6 +405,8 @@ class TunnelProcess(GObject.Object):
         else:
             self._pending_exit = None
         self._cancel_kill_timer()
+        self._cancel_promote_timer()
+        self._cancel_exit_timer()
         # 兜底收尾时管道可能由后代进程持有；取消未完成的读取，释放回调引用。
         if self._read_cancel is not None:
             self._read_cancel.cancel()
@@ -437,7 +468,7 @@ class TunnelManager(GObject.Object):
         手工编辑（或从别处拷贝）config.json 时很容易出现 id 缺失 / 为 null / 两条重复，
         那会让 get() 永远只命中第一条——在 UI 上删除/编辑其中一行，实际操作的是另一条。
         """
-        taken = {p.config.id for p in self.procs}
+        taken = {p.config.id for p in [*self.procs, *self._retiring]}
         if not isinstance(cfg.id, str) or not cfg.id.strip() or cfg.id in taken:
             cfg.id = uuid.uuid4().hex[:10]
         return cfg
@@ -507,7 +538,7 @@ class TunnelManager(GObject.Object):
 
         want_host, want_port = _norm_host(cfg.listen_host), cfg.port
         for p in [*self.active(), *self._retiring]:
-            if p.config.id == cfg.id:
+            if p not in self._retiring and p.config.id == cfg.id:
                 continue
             # 用启动快照而非当前保存值：运行中编辑改了端口后，实际占用的仍是旧端口
             running = p.running_config()
