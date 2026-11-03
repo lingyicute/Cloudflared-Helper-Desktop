@@ -52,7 +52,7 @@ if not APP_ICON_FILE.is_file():
 
 def _xdg(env: str, default: str) -> Path:
     value = os.environ.get(env)
-    return Path(value) if value else Path.home() / default
+    return Path(value) if value and value.strip() else Path.home() / default
 
 
 CONFIG_DIR = _xdg("XDG_CONFIG_HOME", ".config") / "cloudflared-tunnel-manager"
@@ -77,6 +77,7 @@ class Config:
         self.load()
 
     def load(self) -> None:
+        self.data = json.loads(json.dumps(DEFAULTS))
         try:
             with open(self.path, "r", encoding="utf-8") as fh:
                 loaded = json.load(fh)

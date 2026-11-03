@@ -44,7 +44,25 @@ def in_flatpak() -> bool:
 
 def system_desktop_file_exists() -> bool:
     """系统级目录（XDG_DATA_DIRS）里是否已经安装了本应用的 .desktop 文件。"""
-    return any((d / "applications" / DESKTOP_FILE_NAME).is_file() for d in _xdg_data_dirs())
+    try:
+        data_home = _xdg_data_home().resolve()
+    except OSError:
+        data_home = None
+    for d in _xdg_data_dirs():
+        try:
+            if data_home is not None and d.resolve() == data_home:
+                continue
+        except OSError:
+            pass
+        cand = d / "applications" / DESKTOP_FILE_NAME
+        if cand.is_file():
+            try:
+                if GENERATED_MARK in cand.read_text(encoding="utf-8"):
+                    continue
+            except (OSError, UnicodeError):
+                pass
+            return True
+    return False
 
 
 def _quote_exec_arg(arg: str) -> str:
@@ -167,15 +185,28 @@ def install_icon() -> bool:
     target = _xdg_data_home() / "icons" / "hicolor" / "scalable" / "apps" / APP_ICON_FILE.name
     if target.is_symlink():
         return False
+    tmp: Path | None = None
     try:
+        source_bytes = APP_ICON_FILE.read_bytes()
         if target.is_file():
             try:
-                if target.read_bytes() == APP_ICON_FILE.read_bytes():
+                if target.read_bytes() == source_bytes:
                     return False
             except OSError:
                 pass
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(APP_ICON_FILE, target)
+        with tempfile.NamedTemporaryFile(
+            mode="wb", dir=target.parent,
+            prefix=f".{target.name}.", suffix=".tmp", delete=False,
+        ) as fh:
+            tmp = Path(fh.name)
+            fh.write(source_bytes)
+            fh.flush()
+            try:
+                os.chmod(fh.fileno(), 0o644)
+            except OSError:
+                pass
+        tmp.replace(target)
         # 刷新 hicolor 目录的 mtime，让 GTK / 桌面环境放弃过期的 icon-theme.cache
         try:
             os.utime(target.parents[2], None)
@@ -185,6 +216,12 @@ def install_icon() -> bool:
     except OSError as exc:
         print(f"[desktop] 安装图标失败: {exc}", file=sys.stderr)
         return False
+    finally:
+        if tmp is not None:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def install_desktop_file() -> bool:
