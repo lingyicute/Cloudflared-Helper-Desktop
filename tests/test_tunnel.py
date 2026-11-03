@@ -243,3 +243,42 @@ class TunnelTests(unittest.TestCase):
             proc._line_buffer.extend(line.encode('utf-8'))
             proc._flush_log_line()
             self.assertEqual(proc.last_error, line)
+
+    def test_repeated_invalid_start_still_emits_error_signal(self):
+        proc = TunnelProcess(TunnelConfig(hostname='bad host'))
+        states = []
+        proc.connect('state-changed', lambda _p, st: states.append(st))
+        proc.start('cloudflared')
+        proc.start('cloudflared')
+        self.assertEqual(states, [STATE_ERROR, STATE_ERROR])
+
+    def test_on_exit_cancels_kill_and_promote_timers_before_eof(self):
+        proc = self.proc()
+        child = Mock()
+        child.get_if_exited.return_value = True
+        child.get_exit_status.return_value = 0
+        proc._proc, proc.state = child, STATE_STARTING
+        proc._stream, proc._eof = object(), False
+        proc._kill_timer = GLib.timeout_add(60000, lambda: False)
+        proc._promote_timer = GLib.timeout_add(60000, lambda: False)
+        proc._on_exit(child, None)
+        self.assertIsNone(proc._kill_timer)
+        self.assertIsNone(proc._promote_timer)
+        self.assertEqual(proc._pending_exit, 0)
+        proc._force_kill(child)
+        child.force_exit.assert_not_called()
+        proc._finish_exit()
+
+    def test_listener_and_conflict_edge_cases(self):
+        cfg = TunnelConfig(hostname='tcp.example.com', port=True)
+        with self.assertRaises(ValueError):
+            cfg.build_argv('cloudflared')
+        bad = TunnelConfig(hostname=None, listen_host=None, port=2222)
+        self.assertEqual(bad.listen_label, '127.0.0.1:2222')
+        self.assertIn("127.0.0.1:2222", bad.command_string())
+
+        proc = self.proc()
+        proc.config.listen_host = '::ffff:127.0.0.1'
+        proc.state = STATE_RUNNING
+        self.assertIs(self.manager.port_conflict(TunnelConfig(listen_host='localhost.')), proc)
+        proc.state = STATE_STOPPED

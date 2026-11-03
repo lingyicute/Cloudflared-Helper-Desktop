@@ -29,6 +29,8 @@ STATE_LABELS = {
 
 def listener_address(host: str, port: int) -> str:
     """生成 host:port，IPv6 字面量必须加方括号；不接受 URL 或内嵌端口。"""
+    if not isinstance(host, str):
+        raise ValueError("监听地址应为主机名或 IP 地址")
     host = host.strip() or "127.0.0.1"
     if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in host):
         raise ValueError("监听地址不能包含空白或控制字符")
@@ -41,7 +43,7 @@ def listener_address(host: str, port: int) -> str:
         host = f"[{literal}]"
     elif any(c in host for c in "/?#@[]\\"):
         raise ValueError("监听地址应为主机名或 IP 地址")
-    if not 1 <= port <= 65535:
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("端口必须在 1 到 65535 之间")
     return f"{host}:{port}"
 
@@ -104,7 +106,9 @@ class TunnelConfig:
     # 别名，四个子命令共用一个 Action），--url 的 scheme 也只影响缺省值不影响行为，
     # 所以这里固定用 tcp，不必再把“协议类型”存进配置。
     def build_argv(self, binary: str) -> list[str]:
-        if not self.hostname or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in self.hostname):
+        if not isinstance(self.hostname, str) or not self.hostname or any(
+            c.isspace() or ord(c) < 32 or ord(c) == 127 for c in self.hostname
+        ):
             raise ValueError("无效的隧道主机名")
         argv = [
             binary,
@@ -129,16 +133,18 @@ class TunnelConfig:
         try:
             return listener_address(self.listen_host, self.port)
         except ValueError:
-            return f"{self.listen_host.strip() or '127.0.0.1'}:{self.port}"
+            host = self.listen_host.strip() if isinstance(self.listen_host, str) else ""
+            return f"{host or '127.0.0.1'}:{self.port}"
 
     def command_string(self, binary: str = "cloudflared") -> str:
         try:
             argv = self.build_argv(binary)
         except ValueError:
             # 复制命令行时不应崩溃：extra_args 若合法仍按参数切分，仅在引号不配对时整段保留。
+            hostname = self.hostname if isinstance(self.hostname, str) else str(self.hostname or "")
             argv = [
                 binary, "access", "tcp",
-                "--hostname", self.hostname,
+                "--hostname", hostname,
                 "--url", self.listen_label,
             ]
             if isinstance(self.extra_args, str) and self.extra_args.strip():
@@ -225,9 +231,13 @@ class TunnelProcess(GObject.Object):
             # 而是转为 ERROR 状态并写日志，UI 会弹出 toast + 日志按钮。
             self.last_error = f"隧道配置无效: {exc}"
             self._append(f"[启动失败] {self.last_error}")
-            self._set_state(STATE_ERROR)
+            if self.state == STATE_ERROR:
+                self.emit("state-changed", STATE_ERROR)
+            else:
+                self._set_state(STATE_ERROR)
             return
         self.last_error = None
+        self.started_at = None
         self._stopping = False
         self._pending_exit = None
         self._eof = False
@@ -299,7 +309,7 @@ class TunnelProcess(GObject.Object):
     # ------------------------------------------------------------ 回调
     def _force_kill(self, proc: Gio.Subprocess) -> bool:
         self._kill_timer = None
-        if self._proc is proc:
+        if self._proc is proc and self._pending_exit is None:
             self._append("[进程未响应，强制结束]")
             proc.force_exit()
         return False
@@ -376,6 +386,8 @@ class TunnelProcess(GObject.Object):
             return
         code = proc.get_exit_status() if proc.get_if_exited() else -1
         self.started_at = None
+        self._cancel_kill_timer()
+        self._cancel_promote_timer()
         if self._stream is not None and not self._eof:
             # 管道里可能还压着没读完的输出，等 _on_read 读到 EOF 再改状态；
             # 万一写入端被子进程的后代长期持有，兜底定时器负责收尾。
@@ -528,9 +540,12 @@ class TunnelManager(GObject.Object):
             if h.startswith("[") and h.endswith("]"):
                 h = h[1:-1]
             try:
-                h = str(ipaddress.ip_address(h))
+                addr = ipaddress.ip_address(h)
+                if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+                    addr = addr.ipv4_mapped
+                h = str(addr)
             except ValueError:
-                pass
+                h = h.rstrip(".") or h
             # 保守地把 localhost / ::1 与 IPv4 回环视为重叠，避免双栈监听漏报
             if h in ("localhost", "::1"):
                 h = "127.0.0.1"
