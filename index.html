@@ -1904,11 +1904,17 @@ function shellQuote(word) {
   if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(word)) return word;
   return "'" + word.replace(/'/g, "'\\''") + "'";
 }
+function formatListen(host, port) {
+  var h = (host || '').trim() || '127.0.0.1';
+  if (h.indexOf(':') !== -1 && !/^\[.*\]$/.test(h)) h = '[' + h + ']';
+  return h + ':' + port;
+}
 function listenLabel(t) {
   /* 跟真实版 listener_address() 一致：IPv6 字面量要加方括号才能接端口 */
-  var h = (t.listen || '').trim() || '127.0.0.1';
-  if (h.indexOf(':') !== -1 && !/^\[.*\]$/.test(h)) h = '[' + h + ']';
-  return h + ':' + t.port;
+  return formatListen(t.listen, t.port);
+}
+function runningListenLabel(t) {
+  return formatListen(t.runningListen != null ? t.runningListen : t.listen, t.runningPort != null ? t.runningPort : t.port);
 }
 function commandFor(t) { return 'cloudflared access tcp --hostname ' + shellQuote(t.hostname) + ' --url ' + shellQuote(listenLabel(t)) + (t.extra ? ' ' + t.extra : ''); }
 
@@ -2059,7 +2065,7 @@ function pushLog(t, text) {
   }
 }
 function portConflict(t) {
-  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase().replace(/^\[(.*)\]$/, '$1').replace(/\.$/, ''); return (h === 'localhost' || h === '::1' || h === '0:0:0:0:0:0:0:1') ? '127.0.0.1' : h; };
+  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase().replace(/^\[(.*)\]$/, '$1').replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, '$1').replace(/\.$/, ''); return (h === 'localhost' || h === '::1' || h === '0:0:0:0:0:0:0:1') ? '127.0.0.1' : h; };
   var any = ['0.0.0.0', '::', '0:0:0:0:0:0:0:0'];
   return tunnels.filter(function (p) {
     var pPort = p.runningPort != null ? p.runningPort : p.port;
@@ -2073,7 +2079,7 @@ function startTunnel(id) {
   var t = find(id);
   if (!t || isActive(t)) return false;
   var host = (t.hostname || '').trim();
-  if (!host || host.indexOf(' ') !== -1) { toast('「' + displayName(t) + '」的隧道主机名无效，请先编辑修正'); return false; }
+  if (!host || host.charAt(0) === '-' || /[\s\x00-\x1f\x7f/?#@\\]/.test(host)) { toast('「' + displayName(t) + '」的隧道主机名无效，请先编辑修正'); return false; }
   var bin = currentBinary();
   if (!bin) {
     toast('未找到 cloudflared，请先在“版本管理”中安装');
@@ -2108,9 +2114,10 @@ function startTunnel(id) {
       toast(displayName(t) + ' 连接失败：' + t.lastError, { label: '日志', fn: function () { openLogs(t.id); } });
       return;
     }
-    pushLog(t, iso(new Date()) + ' INF Start Websocket listener host=' + listenLabel(t));
+    var bound = runningListenLabel(t);
+    pushLog(t, iso(new Date()) + ' INF Start Websocket listener host=' + bound);
     setState(t, 'running');
-    toast(displayName(t) + ' 已连接：' + listenLabel(t));
+    toast(displayName(t) + ' 已连接：' + bound);
   }, 1700);
   setTimeout(function () {
     if (find(t.id) === t && t.gen === gen && !t.stopping && isActive(t) && t.state === 'running') pushLog(t, iso(new Date()) + ' INF Connection registered connIndex=0 location=HKG');
@@ -2217,7 +2224,7 @@ logView.addEventListener('scroll', function () {
   }
 });
 
-var prefsRoot = $('#prefsRoot'), downloads = {}, downloadTimers = {}, refreshing = false;
+var prefsRoot = $('#prefsRoot'), downloads = {}, downloadTimers = {}, refreshing = false, installAfterRefresh = false, demoGen = 0;
 function verCmp(a, b) {
   /* 与真实版 version_key() 同语义：先比较主版本，再比较稳定版与预发布标识 */
   function parse(t) {
@@ -2320,9 +2327,13 @@ function speedFor(tag) {
 function wirePrefs() {
   var r = $('#vRefresh');
   if (r) r.addEventListener('click', function () {
+    if (r.dataset.busy === '1') return;
+    r.dataset.busy = '1';
+    var g = demoGen;
     r.innerHTML = '<span class="spinner"></span>';
     setTimeout(function () {
-      renderPrefs();
+      if (demoGen !== g) return;
+      renderPrefs(); renderTunnels();
       var cur = currentBinary();
       toast('已重新检测 cloudflared 版本：' + (cur ? cur.version : '未找到'));
     }, 900);
@@ -2331,6 +2342,7 @@ function wirePrefs() {
   if (od) od.addEventListener('click', function () { toast('演示：真实应用会打开 ' + BIN_DIR); });
   var il = $('#vInstallLatest');
   if (il) il.addEventListener('click', function () {
+    if (refreshing) { installAfterRefresh = true; return; }
     if (isInstalled(V.latestStable)) toast('最新版 ' + V.latestStable + ' 已安装');
     else if (downloads[V.latestStable] != null) toast('正在下载 ' + V.latestStable + '…');
     else downloadVersion(V.latestStable);
@@ -2339,16 +2351,24 @@ function wirePrefs() {
   if (rl) rl.addEventListener('click', function () {
     if (refreshing) return;
     refreshing = true;
+    var g = demoGen;
     var sp = $('#vSpin');
     sp.style.display = '';
     rl.style.opacity = '.5';
     setTimeout(function () {
+      if (demoGen !== g) return;
       refreshing = false;
       sp.style.display = 'none';
       rl.style.opacity = '';
       var newest = V.installed[0];
       if (newest && verCmp(newest, V.latestStable) < 0) toast('有新版本可用：' + V.latestStable + '（已安装 ' + newest + '）');
       else toast('版本列表已是最新（' + V.releases.length + ' 条）');
+      if (installAfterRefresh) {
+        installAfterRefresh = false;
+        if (isInstalled(V.latestStable)) toast('最新版 ' + V.latestStable + ' 已安装');
+        else if (downloads[V.latestStable] != null) toast('正在下载 ' + V.latestStable + '…');
+        else downloadVersion(V.latestStable);
+      }
     }, 1300);
   });
   prefsRoot.querySelectorAll('[data-dl]').forEach(function (b) {
@@ -2504,7 +2524,7 @@ function openTunnelDialog(cfg, isNew, focusPort, onClose) {
 
   function save() {
     var name = q('name').value.trim(), host = q('hostname').value.trim();
-    if (!host || /\s/.test(host)) {
+    if (!host || host.charAt(0) === '-' || /[\s/?#@\\]/.test(host)) {
       dialogToast(node, '请输入有效的隧道主机名（不能包含空格）');
       q('hostname').focus(); return;
     }
@@ -2526,6 +2546,9 @@ function openTunnelDialog(cfg, isNew, focusPort, onClose) {
     }
     var listen = q('listen').value.trim() || '127.0.0.1';
     if (/\s/.test(listen)) { dialogToast(node, '监听地址不能包含空格'); q('listen').focus(); return; }
+    if (listen.charAt(0) === '-' || (listen.indexOf(':') !== -1 ? !/^\[?[0-9a-fA-F:]+\]?$/.test(listen) || (listen.charAt(0) === '[' && listen.slice(-1) !== ']') || (listen.charAt(0) !== '[' && listen.slice(-1) === ']') : /[/?#@\[\]\\]/.test(listen))) {
+      dialogToast(node, '监听地址应为主机名或 IP 地址'); q('listen').focus(); return;
+    }
     var autostart = q('autostart').getAttribute('aria-checked') === 'true';
     if (isNew) {
       var t = tunnel(name, host, port, { listen: listen, autostart: autostart, extra: extra });
@@ -2739,6 +2762,9 @@ function fitStage() {
 }
 
 function resetDemo() {
+  demoGen++;
+  refreshing = false;
+  installAfterRefresh = false;
   Object.keys(downloadTimers).forEach(function (k) { clearInterval(downloadTimers[k]); delete downloadTimers[k]; });
   Object.keys(downloads).forEach(function (k) { delete downloads[k]; });
   quickEnabled = true;
