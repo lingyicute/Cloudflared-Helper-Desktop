@@ -50,10 +50,16 @@ class QuoteExecArgTests(unittest.TestCase):
                 self.assertIn(GENERATED_MARK, target.read_text(encoding="utf-8"))
                 self.assertEqual(victim.read_text(), "keep")
 
-                for raw in (b"\xff\xfe", b"", b"[Desktop Entry]\nExec=custom\n"):
+                for raw in (b"\xff\xfe", b"[Desktop Entry]\nExec=custom\n"):
                     target.write_bytes(raw)
                     self.assertFalse(install_desktop_file())
                     self.assertEqual(target.read_bytes(), raw)
+
+                # 空文件（或只有空白）是残骸，应当被重新生成
+                for raw in (b"", b" \n\t\n"):
+                    target.write_bytes(raw)
+                    self.assertTrue(install_desktop_file())
+                    self.assertIn(GENERATED_MARK, target.read_text(encoding="utf-8"))
 
     def test_system_desktop_check_ignores_user_generated_entry_and_installs_icon_safely(self):
         with tempfile.TemporaryDirectory() as tmp:
