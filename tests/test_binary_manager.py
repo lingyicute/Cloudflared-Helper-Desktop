@@ -255,6 +255,25 @@ class BinaryTests(unittest.TestCase):
         BinaryManager(self.bm.versions_dir)
         self.assertFalse(staging.exists())
 
+    def test_size_provides_progress_fallback_and_remove_unlinks_symlinks(self):
+        fractions = []
+        data = b'12345678'
+        with patch('cftm.binary_manager.threading.Thread', InlineThread), \
+             patch('cftm.binary_manager.urllib.request.urlopen', return_value=Response(data)), \
+             patch('cftm.binary_manager.GLib.idle_add', side_effect=lambda cb, *a: cb(*a)):
+            self.bm.download(self.tag, lambda _t, f: fractions.append(f), lambda *_: None, size=len(data))
+        self.assertIn(1.0, fractions)
+
+        outside = Path(self.tmp.name) / 'outside-dir'
+        outside.mkdir()
+        keep = outside / 'keep.txt'
+        keep.write_text('keep')
+        link_tag = '2026.9.0'
+        (self.bm.versions_dir / link_tag).symlink_to(outside, target_is_directory=True)
+        self.bm.remove(link_tag)
+        self.assertFalse((self.bm.versions_dir / link_tag).is_symlink())
+        self.assertEqual(keep.read_text(), 'keep')
+
 
 class FormatSizeTests(unittest.TestCase):
     def test_units_roll_over_at_the_displayed_value(self):
