@@ -262,8 +262,10 @@ class BinaryManager:
                     assets = rel.get("assets", [])
                     if not isinstance(assets, list):
                         assets = []
+                    if rel.get("draft"):
+                        continue
                     tag = rel.get("tag_name", "")
-                    if not isinstance(tag, str) or not tag:
+                    if not _is_safe_tag(tag):
                         continue
                     # 顺手记下本平台资源的 sha256（GitHub 的 "digest" 字段）和大小，
                     # 下载完成后据此校验：api.github.com 和实际下发文件的 CDN 不是同一台主机，
@@ -345,7 +347,7 @@ class BinaryManager:
                     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                     with urllib.request.urlopen(req, timeout=30) as resp, open(tmp, "wb") as fh:
                         try:
-                            total = int(resp.headers.get("Content-Length") or 0)
+                            total = max(int(resp.headers.get("Content-Length") or 0), 0)
                         except (TypeError, ValueError):
                             total = 0
                         got = 0
@@ -393,9 +395,11 @@ class BinaryManager:
                     staged = tmp
                     if self.asset.endswith(".tgz"):
                         with tarfile.open(tmp, "r:gz") as tf:
-                            # 精确匹配 basename，不能把 not-cloudflared 当作程序。
-                            member = next((m for m in tf if Path(m.name).name == "cloudflared"), None)
-                            if member is None or not member.isfile():
+                            # 精确匹配普通文件的 basename：归档里若有同名目录项 cloudflared/ 在前，应跳过它继续查找。
+                            member = next(
+                                (m for m in tf if m.isfile() and Path(m.name).name == "cloudflared"), None
+                            )
+                            if member is None:
                                 raise RuntimeError(f"{self.asset} 里没有普通文件 cloudflared")
                             src = tf.extractfile(member)
                             if src is None:
