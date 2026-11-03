@@ -269,7 +269,7 @@ class QuickTunnelWatcher:
 
     def _open_editor(self, host: str) -> bool:
         """确认框关闭后的下一轮主循环里打开新建对话框（返回 False 表示只执行一次）。"""
-        if not self._window_alive():
+        if not self._is_enabled() or not self._window_alive():
             return False
         try:
             self.on_accept(host)
