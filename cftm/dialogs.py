@@ -260,7 +260,10 @@ class LogWindow(Adw.Window):
     TRIM_SLACK = 200
 
     def __init__(self, parent: Gtk.Window, proc: TunnelProcess):
-        super().__init__(transient_for=parent, default_width=760, default_height=480)
+        super().__init__(
+            transient_for=parent, destroy_with_parent=True,
+            default_width=760, default_height=480,
+        )
         self.proc = proc
         self.set_title(f"日志 · {proc.config.display_name}")
         _escape_shortcut(self)
@@ -303,6 +306,7 @@ class LogWindow(Adw.Window):
         self._hid_log = proc.connect("log-line", lambda _p, line: self._append(line))
         self._hid_state = proc.connect("state-changed", lambda *_: self._update_subtitle())
         self.connect("close-request", self._on_close)
+        self.connect("destroy", self._on_close)
 
     def refresh_title(self) -> None:
         name = self.proc.config.display_name
