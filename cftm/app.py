@@ -181,6 +181,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._force_close = False
         self._quit_dialog: Optional[Adw.MessageDialog] = None
         self._binary_path: Optional[str] = None
+        self._probe_generation = 0
 
         width, height = _window_size(self.config.get("window"))
         self.set_default_size(width, height)
@@ -375,10 +376,10 @@ class MainWindow(Adw.ApplicationWindow):
         proc = self.manager.get(tunnel_id)
         if proc is None or proc.is_active():
             return False
-        # 对话框里拦过了，但手改 config.json 可能留下空 hostname 或含空格：这里再兜底，
-        # 否则会拿 --hostname "" 或含空格的值去起进程，cloudflared 报错信息很迷惑。
+        # 对话框里拦过了，但手改 config.json 可能留下空 hostname 或含空白/控制字符：这里再兜底，
+        # 否则会拿 --hostname "" 或含空白的值去起进程，cloudflared 报错信息很迷惑。
         hostname = proc.config.hostname.strip()
-        if not hostname or " " in hostname:
+        if not hostname or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in hostname):
             self.toast(f"「{proc.config.display_name}」的隧道主机名无效，请先编辑修正")
             return False
         binary = self.current_binary()
@@ -391,7 +392,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast(f"端口 {proc.config.port} 已被「{conflict.config.display_name}」占用")
             return False
         proc.start(binary)
-        return True
+        return proc.is_active()
 
     def stop_tunnel(self, tunnel_id: str) -> None:
         proc = self.manager.get(tunnel_id)
@@ -513,7 +514,7 @@ class MainWindow(Adw.ApplicationWindow):
         if proc is None:
             return
         dlg = Adw.MessageDialog(
-            transient_for=self, heading=f"删除「{proc.config.display_name}」？",
+            transient_for=self, modal=True, heading=f"删除「{proc.config.display_name}」？",
             body="如果该隧道正在运行，将会被立即断开。此操作不可撤销。",
         )
         dlg.add_response("cancel", "取消")
@@ -551,6 +552,8 @@ class MainWindow(Adw.ApplicationWindow):
     def on_binary_changed(self) -> None:
         path = self.current_binary()
         self._binary_path = path
+        self._probe_generation += 1
+        generation = self._probe_generation
         self.banner.set_revealed(path is None)
         if path is None:
             self.binary_label.set_label("cloudflared：未安装")
@@ -564,8 +567,8 @@ class MainWindow(Adw.ApplicationWindow):
 
         def done(version: Optional[str]) -> bool:
             try:
-                # 窗口可能已在探测期间被销毁，避免访问已销毁的控件
-                if self._binary_path != path:
+                # 窗口可能已在探测期间被销毁或已有更新的探测请求
+                if self._probe_generation != generation or self._binary_path != path:
                     return False
                 # 检查窗口是否仍有效
                 if not self.get_root():
@@ -596,6 +599,8 @@ class MainWindow(Adw.ApplicationWindow):
         running = len(self.manager.active())
         if running == 0 or self._force_close:
             self._save_window_size()
+            for win in list(self._log_windows.values()):
+                win.close()
             self.manager.stop_all()
             return False
         if self._quit_dialog is not None:
@@ -603,7 +608,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._quit_dialog.present()
             return True
         dlg = Adw.MessageDialog(
-            transient_for=self, heading="退出并断开所有隧道？",
+            transient_for=self, modal=True, heading="退出并断开所有隧道？",
             body=f"仍有 {running} 个隧道处于连接状态，退出后将全部断开。",
         )
         dlg.add_response("cancel", "取消")
