@@ -32,8 +32,8 @@ def listener_address(host: str, port: int) -> str:
     if not isinstance(host, str):
         raise ValueError("监听地址应为主机名或 IP 地址")
     host = host.strip() or "127.0.0.1"
-    if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in host):
-        raise ValueError("监听地址不能包含空白或控制字符")
+    if host.startswith("-") or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in host):
+        raise ValueError("监听地址不能以连字符开头或包含空白、控制字符")
     if ":" in host:
         literal = host[1:-1] if host.startswith("[") and host.endswith("]") else host
         try:
@@ -106,8 +106,11 @@ class TunnelConfig:
     # 别名，四个子命令共用一个 Action），--url 的 scheme 也只影响缺省值不影响行为，
     # 所以这里固定用 tcp，不必再把“协议类型”存进配置。
     def build_argv(self, binary: str) -> list[str]:
-        if not isinstance(self.hostname, str) or not self.hostname or any(
-            c.isspace() or ord(c) < 32 or ord(c) == 127 for c in self.hostname
+        if (
+            not isinstance(self.hostname, str)
+            or not self.hostname
+            or self.hostname.startswith("-")
+            or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c in "/?#@\\" for c in self.hostname)
         ):
             raise ValueError("无效的隧道主机名")
         argv = [
@@ -277,8 +280,10 @@ class TunnelProcess(GObject.Object):
         # 也不要再挂一个 5 秒定时器；只有显式 force 才升级为强杀。
         if self._stopping and not force:
             return
+        already_stopping = self._stopping
         self._stopping = True
-        self._append("[正在断开…]")
+        if not already_stopping:
+            self._append("[正在断开…]")
         try:
             if force:
                 proc.force_exit()
@@ -286,9 +291,8 @@ class TunnelProcess(GObject.Object):
                 proc.send_signal(signal.SIGTERM)
         except Exception:  # noqa: BLE001  (非 Unix 平台)
             proc.force_exit()
-        if force:
-            self._cancel_kill_timer()
-        else:
+        self._cancel_kill_timer()
+        if not force:
             self._kill_timer = GLib.timeout_add_seconds(5, self._force_kill, proc)
 
     def _cancel_kill_timer(self) -> None:
@@ -480,6 +484,7 @@ class TunnelManager(GObject.Object):
         手工编辑（或从别处拷贝）config.json 时很容易出现 id 缺失 / 为 null / 两条重复，
         那会让 get() 永远只命中第一条——在 UI 上删除/编辑其中一行，实际操作的是另一条。
         """
+        self._retiring = {p for p in self._retiring if p.is_active()}
         taken = {p.config.id for p in [*self.procs, *self._retiring]}
         if not isinstance(cfg.id, str) or not cfg.id.strip() or cfg.id in taken:
             cfg.id = uuid.uuid4().hex[:10]
@@ -516,6 +521,8 @@ class TunnelManager(GObject.Object):
         if proc.is_active():
             self._retiring.add(proc)
         proc.stop()
+        if not proc.is_active():
+            self._retiring.discard(proc)
         self.save()
         self.emit("tunnels-changed")
 
@@ -551,6 +558,7 @@ class TunnelManager(GObject.Object):
                 h = "127.0.0.1"
             return h
 
+        self._retiring = {p for p in self._retiring if p.is_active()}
         want_host, want_port = _norm_host(cfg.listen_host), cfg.port
         for p in [*self.active(), *self._retiring]:
             if p not in self._retiring and p.config.id == cfg.id:
