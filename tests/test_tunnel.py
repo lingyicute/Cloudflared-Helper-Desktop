@@ -61,8 +61,17 @@ class TunnelTests(unittest.TestCase):
             cfg = TunnelConfig(hostname='tcp.example.com', listen_host=host, port=2222)
             with self.subTest(host=host):
                 self.assertEqual(cfg.listen_label, label)
-        bad = TunnelConfig(hostname='a b', listen_host='::1', port=2222)
+        bad = TunnelConfig(hostname='a b', listen_host='::1', port=2222, extra_args='   ')
         self.assertTrue(bad.command_string().endswith("--url '[::1]:2222'"))
+        bad_with_extra = TunnelConfig(hostname='a b', listen_host='::1', port=2222,
+                                      extra_args='--no-autoupdate --loglevel debug')
+        self.assertTrue(bad_with_extra.command_string().endswith("--url '[::1]:2222' --no-autoupdate --loglevel debug"))
+
+    def test_from_dict_rejects_boolean_port_and_normalizes_fields(self):
+        cfg = TunnelConfig.from_dict({'id': '  abc  ', 'port': True, 'listen_host': '   '})
+        self.assertEqual(cfg.id, 'abc')
+        self.assertEqual(cfg.port, 21128)
+        self.assertEqual(cfg.listen_host, '127.0.0.1')
 
     def test_invalid_arguments_are_rejected_before_spawn(self):
         for field, value in [('hostname', 'tcp\texample.com'), ('hostname', 'tcp\x00.example.com'),
@@ -202,3 +211,35 @@ class TunnelTests(unittest.TestCase):
         self.assertFalse(proc._stopping)
         proc._finish_exit()
         self.assertEqual(proc.state, STATE_ERROR)
+
+    def test_retiring_process_blocks_same_id_conflict_and_reuses_fresh_id(self):
+        proc = self.proc()
+        old_id = proc.config.id
+        proc.state = STATE_RUNNING
+        self.manager.procs.remove(proc)
+        self.manager._retiring.add(proc)
+        try:
+            same_id_cfg = TunnelConfig(id=old_id, hostname='tcp.example.com', port=proc.config.port)
+            self.assertIs(self.manager.port_conflict(same_id_cfg), proc)
+            added = self.manager.add(same_id_cfg)
+            self.assertNotEqual(added.config.id, old_id)
+        finally:
+            self.manager._retiring.discard(proc)
+            proc.state = STATE_STOPPED
+
+    def test_finish_exit_cancels_promote_and_exit_timers(self):
+        proc = self.proc()
+        proc._promote_timer = GLib.timeout_add(60000, lambda: False)
+        proc._exit_timer = GLib.timeout_add(60000, lambda: False)
+        proc.state = STATE_STARTING
+        proc._finish_exit(0)
+        self.assertIsNone(proc._promote_timer)
+        self.assertIsNone(proc._exit_timer)
+
+    def test_fatal_and_usage_logs_update_last_error(self):
+        for line in ('2026-01-01T00:00:00Z FTL failed to bind',
+                     'Incorrect Usage: flag provided but not defined: -foo'):
+            proc = self.proc()
+            proc._line_buffer.extend(line.encode('utf-8'))
+            proc._flush_log_line()
+            self.assertEqual(proc.last_error, line)
