@@ -126,6 +126,32 @@ class BinaryTests(unittest.TestCase):
         self.assertIsNone(self.download(self.archive('./cloudflared')))
         self.assertEqual(self.bm.path_for(self.tag).read_bytes(), b'new')
 
+    def test_tgz_skips_directory_named_cloudflared(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode='w:gz') as tf:
+            directory = tarfile.TarInfo('cloudflared')
+            directory.type = tarfile.DIRTYPE
+            tf.addfile(directory)
+            member = tarfile.TarInfo('cloudflared/cloudflared')
+            member.size = 3
+            tf.addfile(member, io.BytesIO(b'new'))
+        self.bm.system, self.bm.asset = 'darwin', 'cloudflared-darwin-amd64.tgz'
+        self.assertIsNone(self.download(Response(data.getvalue(), length=-1)))
+        self.assertEqual(self.bm.path_for(self.tag).read_bytes(), b'new')
+
+    def test_fetch_releases_filters_unsafe_and_draft_tags(self):
+        payload = b'[{"tag_name":"../evil","assets":[]},{"tag_name":".hidden","assets":[]},' \
+                  b'{"tag_name":"2026.1.0","draft":true,"assets":[]},' \
+                  b'{"tag_name":"2026.2.0","published_at":"2026-02-01T00:00:00Z","assets":[{"name":"cloudflared-linux-amd64","size":10}]}]'
+        got = []
+        with patch('cftm.binary_manager.threading.Thread', InlineThread), \
+             patch('cftm.binary_manager.urllib.request.urlopen', return_value=Response(payload)), \
+             patch('cftm.binary_manager.GLib.idle_add', side_effect=lambda cb, *a: cb(*a)):
+            self.bm.fetch_releases(lambda rels, err: got.append((rels, err)))
+        self.assertEqual(len(got), 1)
+        self.assertIsNone(got[0][1])
+        self.assertEqual([r['tag'] for r in got[0][0]], ['2026.2.0'])
+
     def test_tgz_rejects_suffix_match_and_links(self):
         final = self.install_old()
         for name, kind in [('not-cloudflared', tarfile.REGTYPE),
