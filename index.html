@@ -1836,18 +1836,19 @@ function binPath(tag) { return BIN_DIR + '/' + tag + '/cloudflared'; }
 function isInstalled(tag) { return V.installed.indexOf(tag) !== -1; }
 function currentBinary() {
   if (V.activePolicy === 'system' && V.systemBinary) return { version: V.systemVersion, path: V.systemBinary };
-  if (V.activePolicy !== 'system' && V.activePolicy !== 'latest-installed') return { version: V.activePolicy, path: binPath(V.activePolicy) };
+  if (V.activePolicy !== 'system' && V.activePolicy !== 'latest-installed' && isInstalled(V.activePolicy)) return { version: V.activePolicy, path: binPath(V.activePolicy) };
   if (V.installed.length) return { version: V.installed[0], path: binPath(V.installed[0]) };
   if (V.systemBinary) return { version: V.systemVersion, path: V.systemBinary };
   return null;
 }
 function tunnel(name, hostname, port, opt) {
   var o = opt || {};
+  var listen = o.listen || '127.0.0.1';
   return {
     id: 't' + Math.random().toString(36).slice(2, 9),
     name: name, hostname: hostname, port: port,
-    listen: o.listen || '127.0.0.1', autostart: !!o.autostart,
-    extra: o.extra || '', stopping: false, gen: 0,
+    listen: listen, runningPort: port, runningListen: listen,
+    autostart: !!o.autostart, extra: o.extra || '', stopping: false, gen: 0,
     state: o.state || 'stopped', lastError: o.lastError || null,
     flaky: !!o.flaky, logs: []
   };
@@ -2058,11 +2059,13 @@ function pushLog(t, text) {
   }
 }
 function portConflict(t) {
-  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase().replace(/^\[(.*)\]$/, '$1'); return (h === 'localhost' || h === '::1') ? '127.0.0.1' : h; };
+  var norm = function (h) { h = (h || '127.0.0.1').trim().toLowerCase().replace(/^\[(.*)\]$/, '$1').replace(/\.$/, ''); return (h === 'localhost' || h === '::1' || h === '0:0:0:0:0:0:0:1') ? '127.0.0.1' : h; };
   var any = ['0.0.0.0', '::', '0:0:0:0:0:0:0:0'];
   return tunnels.filter(function (p) {
-    if (p === t || !isActive(p) || p.port !== t.port) return false;
-    var a = norm(p.listen), b = norm(t.listen);
+    var pPort = p.runningPort != null ? p.runningPort : p.port;
+    var pListen = p.runningListen != null ? p.runningListen : p.listen;
+    if (p === t || !isActive(p) || pPort !== t.port) return false;
+    var a = norm(pListen), b = norm(t.listen);
     return any.indexOf(a) !== -1 || any.indexOf(b) !== -1 || a === b;
   })[0] || null;
 }
@@ -2082,6 +2085,8 @@ function startTunnel(id) {
 
   t.lastError = null;
   t.stopping = false;
+  t.runningPort = t.port;
+  t.runningListen = t.listen;
   var gen = (t.gen = (t.gen || 0) + 1);
   setState(t, 'starting');
   pushLog(t, '$ ' + commandFor(t));
@@ -2161,7 +2166,7 @@ function openLogs(id) {
 var logWin = $('#logWin'), logView = $('#logView'), logTarget = null, logFollow = true;
 function logClass(line) {
   var body = line.replace(/^\[[^\]]*\]\s*/, '');
-  if (/\bERR\b/.test(body) || /^error\b/i.test(body)) return 'err';
+  if (/\b(ERR|FTL)\b/.test(body) || /level=(error|fatal)\b/i.test(body) || /^(error|fatal|incorrect usage)\b/i.test(body)) return 'err';
   if (body.charAt(0) === '$' || body.charAt(0) === '[') return 'dim';
   return '';
 }
@@ -2214,16 +2219,24 @@ logView.addEventListener('scroll', function () {
 
 var prefsRoot = $('#prefsRoot'), downloads = {}, downloadTimers = {}, refreshing = false;
 function verCmp(a, b) {
-  /* 与真实版 version_key() 同语义：带预发布后缀的视为更旧 */
-  function key(t) {
-    var nums = String(t).split(/[^\d]+/).filter(Boolean).map(Number);
-    nums.push(/-.*[a-z]/i.test(String(t)) ? 0 : 1);
-    return nums;
+  /* 与真实版 version_key() 同语义：先比较主版本，再比较稳定版与预发布标识 */
+  function parse(t) {
+    var m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(String(t || ''));
+    if (!m) return { core: [0, 0, 0], stable: -1, pre: [] };
+    return {
+      core: [+m[1], +m[2], +m[3]],
+      stable: m[4] === undefined ? 1 : 0,
+      pre: m[4] ? m[4].split('.').map(function (p) { return /^\d+$/.test(p) ? [0, +p] : [1, p]; }) : []
+    };
   }
-  var pa = key(a), pb = key(b);
-  for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
-    var x = pa[i] || 0, y = pb[i] || 0;
-    if (x !== y) return x - y;
+  var ka = parse(a), kb = parse(b), i;
+  for (i = 0; i < 3; i++) if (ka.core[i] !== kb.core[i]) return ka.core[i] - kb.core[i];
+  if (ka.stable !== kb.stable) return ka.stable - kb.stable;
+  for (i = 0; i < Math.max(ka.pre.length, kb.pre.length); i++) {
+    if (!ka.pre[i]) return -1;
+    if (!kb.pre[i]) return 1;
+    if (ka.pre[i][0] !== kb.pre[i][0]) return ka.pre[i][0] - kb.pre[i][0];
+    if (ka.pre[i][1] !== kb.pre[i][1]) return ka.pre[i][1] < kb.pre[i][1] ? -1 : 1;
   }
   return 0;
 }
