@@ -1847,6 +1847,7 @@ function tunnel(name, hostname, port, opt) {
     id: 't' + Math.random().toString(36).slice(2, 9),
     name: name, hostname: hostname, port: port,
     listen: o.listen || '127.0.0.1', autostart: !!o.autostart,
+    extra: o.extra || '', stopping: false, gen: 0,
     state: o.state || 'stopped', lastError: o.lastError || null,
     flaky: !!o.flaky, logs: []
   };
@@ -1908,7 +1909,7 @@ function listenLabel(t) {
   if (h.indexOf(':') !== -1 && !/^\[.*\]$/.test(h)) h = '[' + h + ']';
   return h + ':' + t.port;
 }
-function commandFor(t) { return 'cloudflared access tcp --hostname ' + shellQuote(t.hostname) + ' --url ' + shellQuote(listenLabel(t)); }
+function commandFor(t) { return 'cloudflared access tcp --hostname ' + shellQuote(t.hostname) + ' --url ' + shellQuote(listenLabel(t)) + (t.extra ? ' ' + t.extra : ''); }
 
 var mock = $('#mock'), scrim = $('#scrim'), toastHost = $('#toastHost');
 function toast(msg, action) {
@@ -2080,17 +2081,19 @@ function startTunnel(id) {
   if (conflict) { toast('端口 ' + t.port + ' 已被「' + displayName(conflict) + '」占用'); return false; }
 
   t.lastError = null;
+  t.stopping = false;
+  var gen = (t.gen = (t.gen || 0) + 1);
   setState(t, 'starting');
-  pushLog(t, '$ cloudflared access tcp --hostname ' + host + ' --url ' + listenLabel(t));
+  pushLog(t, '$ ' + commandFor(t));
   var fail = t.flaky;
   t.flaky = false;
   setTimeout(function () {
-    if (t.state !== 'starting') return;
+    if (find(t.id) !== t || t.gen !== gen || t.stopping || t.state !== 'starting') return;
     pushLog(t, iso(new Date()) + ' INF Starting tunnel client');
     pushLog(t, iso(new Date()) + ' INF Version ' + bin.version + ' (Checksum 5c8a2c4f)');
   }, 420);
   setTimeout(function () {
-    if (t.state !== 'starting') return;
+    if (find(t.id) !== t || t.gen !== gen || t.stopping || t.state !== 'starting') return;
     if (fail) {
       pushLog(t, iso(new Date()) + ' ERR Failed to connect to the tunnel. The tunnel may be down or the hostname may be wrong');
       pushLog(t, iso(new Date()) + ' ERR Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared');
@@ -2105,15 +2108,19 @@ function startTunnel(id) {
     toast(displayName(t) + ' 已连接：' + listenLabel(t));
   }, 1700);
   setTimeout(function () {
-    if (isActive(t) && t.state === 'running') pushLog(t, iso(new Date()) + ' INF Connection registered connIndex=0 location=HKG');
+    if (find(t.id) === t && t.gen === gen && !t.stopping && isActive(t) && t.state === 'running') pushLog(t, iso(new Date()) + ' INF Connection registered connIndex=0 location=HKG');
   }, 2900);
   return true;
 }
 function stopTunnel(id) {
   var t = find(id);
-  if (!t || !isActive(t)) return;
+  if (!t || !isActive(t) || t.stopping) return;
+  t.stopping = true;
+  var gen = (t.gen = (t.gen || 0) + 1);
   pushLog(t, '[正在断开…]');
   setTimeout(function () {
+    if (find(t.id) !== t || t.gen !== gen) return;
+    t.stopping = false;
     pushLog(t, iso(new Date()) + ' INF Connection closed connIndex=0');
     pushLog(t, '[进程已退出，状态码 0]');
     setState(t, 'stopped');
@@ -2508,7 +2515,7 @@ function openTunnelDialog(cfg, isNew, focusPort, onClose) {
     if (/\s/.test(listen)) { dialogToast(node, '监听地址不能包含空格'); q('listen').focus(); return; }
     var autostart = q('autostart').getAttribute('aria-checked') === 'true';
     if (isNew) {
-      var t = tunnel(name, host, port, { listen: listen, autostart: autostart });
+      var t = tunnel(name, host, port, { listen: listen, autostart: autostart, extra: extra });
       tunnels.push(t);
       renderTunnels();
       toast('已添加隧道「' + displayName(t) + '」');
@@ -2516,8 +2523,9 @@ function openTunnelDialog(cfg, isNew, focusPort, onClose) {
       var cur = find(cfg.id);
       if (cur) {
         var was = isActive(cur);
-        cur.name = name; cur.hostname = host; cur.port = port; cur.listen = listen; cur.autostart = autostart;
+        cur.name = name; cur.hostname = host; cur.port = port; cur.listen = listen; cur.autostart = autostart; cur.extra = extra;
         renderTunnels();
+        if (logTarget === cur) renderLog();
         if (was) toast('配置已保存，将在下次连接时生效'); else toast('配置已保存');
       }
     }
@@ -2654,10 +2662,10 @@ tunnelList.addEventListener('click', function (e) {
   else if (act === 'menu') {
     openPopover(hit, [
       { label: '编辑', fn: function () {
-          openTunnelDialog({ id: t.id, name: t.name, hostname: t.hostname, port: t.port, listen: t.listen, autostart: t.autostart }, false, false);
+          openTunnelDialog({ id: t.id, name: t.name, hostname: t.hostname, port: t.port, listen: t.listen, autostart: t.autostart, extra: t.extra }, false, false);
         } },
       { label: '复制为副本', fn: function () {
-          var c = tunnel(displayName(t) + ' (副本)', t.hostname, Math.min(65535, t.port + 1), { listen: t.listen });
+          var c = tunnel(displayName(t) + ' (副本)', t.hostname, Math.min(65535, t.port + 1), { listen: t.listen, extra: t.extra });
           tunnels.push(c); renderTunnels();
         } },
       { label: '复制命令行', fn: function () {
