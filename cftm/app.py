@@ -367,7 +367,7 @@ class MainWindow(Adw.ApplicationWindow):
             toast.set_timeout(6)
             self.toasts.add_toast(toast)
         elif state == STATE_RUNNING:
-            self.toast(f"{name} 已连接：{proc.config.listen_label}")
+            self.toast(f"{name} 已连接：{proc.running_config().listen_label}")
 
     # ------------------------------------------------------------ 隧道操作
     def toast(self, message: str) -> None:
