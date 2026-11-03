@@ -240,7 +240,8 @@ def install_desktop_file() -> bool:
             existing = target.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
             return False
-        if GENERATED_MARK not in existing:
+        # 空文件（例如旧版本非原子写入时崩溃留下的残骸）不可能是用户有意放置的，需要修复
+        if existing.strip() and GENERATED_MARK not in existing:
             return False  # 用户手工放置的文件，不要动
     return _write_if_changed(target, _build_desktop_entry())
 
