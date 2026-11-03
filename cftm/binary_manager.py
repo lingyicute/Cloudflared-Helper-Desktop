@@ -142,8 +142,14 @@ class BinaryManager:
         self._clean_stale_parts()
 
     def _clean_stale_parts(self) -> None:
-        """清掉上次异常退出时残留的 .part / .extracting 文件，避免越积越大。"""
+        """清掉上次异常退出时残留的 .install-* 暂存目录及 .part / .extracting 文件，避免越积越大。"""
         try:
+            for staging in self.versions_dir.glob(".install-*"):
+                try:
+                    if not staging.is_symlink() and staging.is_dir():
+                        shutil.rmtree(staging, ignore_errors=True)
+                except OSError:
+                    pass
             # 清理所有可能的二进制名对应的残留文件，兼容跨平台切换或旧版本残留
             exe_names = {"cloudflared", "cloudflared.exe"}
             exe_names.add(self.exe_name)
@@ -158,7 +164,7 @@ class BinaryManager:
             # 顺手收掉因此变空的版本目录
             for child in self.versions_dir.iterdir():
                 try:
-                    if child.is_dir() and not any(child.iterdir()):
+                    if not child.is_symlink() and child.is_dir() and not any(child.iterdir()):
                         child.rmdir()
                 except OSError:
                     pass
@@ -229,8 +235,15 @@ class BinaryManager:
         """运行 `cloudflared --version` 并返回精简的版本字符串。"""
         try:
             out = subprocess.run(
-                [path, "--version"], capture_output=True, text=True, timeout=8
+                [path, "--version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=8,
             )
+            if out.returncode != 0:
+                return None
             text = (out.stdout or out.stderr).strip()
             match = re.search(r"version\s+(\S+)", text, re.IGNORECASE)
             return match.group(1) if match else (text.splitlines()[0] if text else None)
@@ -321,15 +334,20 @@ class BinaryManager:
                 raise DownloadCancelled()
 
         def finish(error: Optional[str]) -> None:
-            """注销下载状态，再通知 UI。
+            """在主线程投递完成回调前同一轮注销下载状态。
 
-            顺序很重要：如果先通知 UI、再在 finally 里注销，主线程有机会在两步之间
-            跑掉 ``_sync_release_rows``，此时 ``is_downloading()`` 仍为真，那一行会被
-            跳过刷新，进度条永远停在最后一次进度上。
+            顺序很重要：必须在同一主线程回调里先注销状态再调用 ``done_cb``，这样此前排队的
+            ``progress_cb`` 仍能读到 ``_download_stats``，而 ``done_cb`` 触发的
+            ``_sync_release_rows`` 与同版本重试又能立即看到 ``is_downloading() == False``。
             """
-            self._active_downloads.pop(tag, None)
-            self._download_stats.pop(tag, None)
-            GLib.idle_add(done_cb, tag, error)
+            def notify() -> bool:
+                if self._active_downloads.get(tag) is cancelled:
+                    self._active_downloads.pop(tag, None)
+                    self._download_stats.pop(tag, None)
+                done_cb(tag, error)
+                return False
+
+            GLib.idle_add(notify)
 
         def work() -> None:
             dest_dir = self.versions_dir / tag
@@ -361,9 +379,13 @@ class BinaryManager:
                             chunk = resp.read(1 << 16)
                             if not chunk:
                                 break
+                            got += len(chunk)
+                            if total and got > total:
+                                raise RuntimeError(f"下载不完整（{got}/{total} 字节），请重试")
+                            if size and got > size:
+                                raise RuntimeError(f"文件大小与发布信息不符（{got}/{size} 字节），已丢弃")
                             fh.write(chunk)
                             hasher.update(chunk)
-                            got += len(chunk)
                             now = time.monotonic()
                             if now - win_t >= 1.0:
                                 # 每约 1 秒重新采样一次瞬时速度，避免数字剧烈抖动
@@ -441,4 +463,5 @@ class BinaryManager:
         # 防路径穿越：tag 只能是单级目录名，否则 rmtree 会删到外面去。
         if not _is_safe_tag(tag):
             return
+        self.cancel(tag)
         shutil.rmtree(self.versions_dir / tag, ignore_errors=True)
