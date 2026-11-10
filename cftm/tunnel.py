@@ -130,7 +130,17 @@ class TunnelConfig:
             value = getattr(cfg, str_field)
             if not isinstance(value, str):
                 setattr(cfg, str_field, "" if value is None else str(value))
-        cfg.autostart = bool(cfg.autostart)
+        # bool("false") 是 True：手改配置时把开关写成字符串 "false" 不能反而开启自动连接。
+        # 只认明确的真值，其余（null、空字符串、对象、列表）一律视为关闭。
+        autostart = cfg.autostart
+        if isinstance(autostart, str):
+            cfg.autostart = autostart.strip().lower() in ("1", "true", "yes", "on")
+        elif isinstance(autostart, bool):
+            cfg.autostart = autostart
+        elif isinstance(autostart, (int, float)):
+            cfg.autostart = bool(autostart)
+        else:
+            cfg.autostart = False
         # 额外清理：hostname 和 listen_host 去除首尾空白，避免后续校验遗漏
         cfg.hostname = cfg.hostname.strip()
         # 旧版本允许保存 URL 形式（https://host/path）的主机名，升级后自动整理成纯域名，
@@ -571,6 +581,25 @@ class TunnelManager(GObject.Object):
         self.save()
         self.emit("tunnels-changed")
 
+    def _next_free_port(self, port: int) -> int:
+        """从 ``port`` 之后开始找下一个没有任何隧道声明的端口（含正在退出的）。
+
+        原端口 >= 1024 时只在 1024–65535 内绕回：从 65535 绕回 1 会得到需要特权才能
+        监听的端口，副本一启动就会因权限不足失败。
+        """
+        port = int(port)
+        used = {p.config.port for p in self.procs}
+        used.update(p.running_config().port for p in self.procs if p.is_active())
+        used.update(p.config.port for p in self._retiring)
+        used.update(p.running_config().port for p in self._retiring if p.is_active())
+        low = 1024 if port >= 1024 else 1
+        span = 65535 - low + 1
+        for offset in range(1, span + 1):
+            candidate = (port - low + offset) % span + low
+            if candidate not in used:
+                return candidate
+        return port  # pragma: no cover  (范围内的端口全被占用)
+
     def duplicate(self, tunnel_id: str) -> Optional[TunnelProcess]:
         proc = self.get(tunnel_id)
         if proc is None:
@@ -579,6 +608,10 @@ class TunnelManager(GObject.Object):
         cfg.id = uuid.uuid4().hex[:10]
         cfg.name = f"{proc.config.display_name} (副本)"
         cfg.autostart = False
+        # 原隧道正在运行时，副本沿用同一个 host:port 根本连不上；仅在这种真冲突下
+        # 顺延到空闲端口，未运行时保持用户原来的端口不变。
+        if self.port_conflict(cfg) is not None:
+            cfg.port = self._next_free_port(cfg.port)
         return self.add(cfg)
 
     # ------------------------------------------------------------ 批量
