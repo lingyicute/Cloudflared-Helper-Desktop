@@ -41,6 +41,13 @@ _HOSTNAME_IP_MSG = "cloudflared 不支持 IP 地址，请使用域名"
 _HOSTNAME_FORM_MSG = "需为完整域名（如 ssh.example.com），不含协议、路径或端口"
 
 
+def _signal_name(signum: int) -> str:
+    try:
+        return signal.Signals(signum).name
+    except ValueError:
+        return str(signum)
+
+
 def normalize_hostname(raw: object) -> str:
     """把用户输入整理成隧道主机名；无效时抛 ValueError。
 
@@ -253,6 +260,8 @@ class TunnelProcess(GObject.Object):
         self._exit_timer: Optional[int] = None
         # 进程已退出、但管道里可能还压着没读完的输出时，记下退出码，等 EOF 再收尾
         self._pending_exit: Optional[int] = None
+        # 进程是被信号结束的（没有退出码）时记下信号编号，收尾时写进日志
+        self._exit_signal: Optional[int] = None
         self._eof = False
         # 启动瞬间配置的快照：运行中编辑会替换 self.config（保存的新值），
         # 但实际监听的仍是旧端口；端口冲突检测必须用快照，否则会漏报/误报。
@@ -462,7 +471,12 @@ class TunnelProcess(GObject.Object):
             pass
         if proc is not self._proc:
             return
-        code = proc.get_exit_status() if proc.get_if_exited() else -1
+        if proc.get_if_exited():
+            code, self._exit_signal = proc.get_exit_status(), None
+        else:
+            # 断开时的 SIGTERM、强杀、OOM 等：没有退出码可言
+            code = -1
+            self._exit_signal = proc.get_term_sig() if proc.get_if_signaled() else None
         self.started_at = None
         self._cancel_kill_timer()
         self._cancel_promote_timer()
@@ -506,7 +520,11 @@ class TunnelProcess(GObject.Object):
         self._proc = None
         self._stream = None
         self._running_snapshot = None
-        self._append(f"[进程已退出，状态码 {code}]")
+        sig, self._exit_signal = self._exit_signal, None
+        if sig is None:
+            self._append(f"[进程已退出，状态码 {code}]")
+        else:
+            self._append(f"[进程已被信号 {_signal_name(sig)} 终止]")
         stopped = self._stopping or code == 0
         self._stopping = False
         self._set_state(STATE_STOPPED if stopped else STATE_ERROR)
