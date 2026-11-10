@@ -349,13 +349,17 @@ class MainWindow(Adw.ApplicationWindow):
                 except Exception:
                     pass
         self._rows = []
-        for proc in self.manager.procs:
+        for index, proc in enumerate(self.manager.procs):
             row = retained.get(id(proc))
             if row is None:
                 row = TunnelRow(proc, self)
-                self.listbox.append(row)
+                # 按管理器顺序插入：复用旧行后 append 会让 GTK 顺序与 manager.procs 脱节。
+                self.listbox.insert(row, index)
             else:
                 row.refresh()
+                if self.listbox.get_row_at_index(index) is not row:
+                    self.listbox.remove(row)
+                    self.listbox.insert(row, index)
             self._rows.append(row)
         self.list_stack.set_visible_child_name("list" if self._rows else "empty")
         self._update_summary()
