@@ -189,6 +189,15 @@ class UIRegressions(unittest.TestCase):
         no_clipboard.get_clipboard.return_value = None
         self.assertFalse(copy_text(no_clipboard, 'cloudflared access tcp'))
 
+    def test_quick_tunnel_switch_ignores_truthy_strings(self):
+        # 手改 config.json 写成 "false" 时不能因为 bool("false") 为 True 而读取剪贴板
+        win = Mock()
+        for raw, want in (('false', False), ('off', False), (0, False), (False, False),
+                          ('true', True), (True, True), (None, True)):
+            with self.subTest(raw=raw):
+                win.config.get.return_value = raw
+                self.assertIs(MainWindow._quick_tunnel_enabled(win), want)
+
 
 if __name__ == '__main__':
     unittest.main()

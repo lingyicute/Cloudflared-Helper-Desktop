@@ -67,6 +67,28 @@ DEFAULTS: dict[str, Any] = {
     "clipboard_quick_tunnel": True,
 }
 
+_TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
+_FALSE_WORDS = frozenset({"", "0", "false", "no", "off"})
+
+
+def strict_bool(value: Any, default: bool = False) -> bool:
+    """解析 config.json 里可能被手改过的开关值。
+
+    bool("false") 是 True：只认布尔、数字和明确的真/假字符串，
+    null、对象、列表及认不出的字符串一律退回 ``default``。
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word in _TRUE_WORDS:
+            return True
+        if word in _FALSE_WORDS:
+            return False
+    return default
+
 
 class Config:
     """极简的 JSON 配置对象。"""
