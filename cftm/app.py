@@ -157,7 +157,7 @@ def _window_size(raw) -> tuple[int, int]:
     if not isinstance(raw, dict):
         raw = {}
 
-    def pick(key: str, fallback: int) -> int:
+    def pick(key: str, fallback: int, minimum: int) -> int:
         item = raw.get(key, fallback)
         if isinstance(item, bool):
             return fallback
@@ -167,9 +167,11 @@ def _window_size(raw) -> tuple[int, int]:
             # OverflowError：config 里写了 Infinity（json 允许解析为 inf），
             # int(inf) 会抛 OverflowError 而非 ValueError，必须接住。
             return fallback
-        return min(max(value, 640), 4096)
+        return min(max(value, minimum), 4096)
 
-    return pick("width", 980), pick("height", 660)
+    # 高度下限必须与 set_size_request 一致：把两者都按 640 夹紧会让用户上次
+    # 调矮的窗口每次启动都被强行拉高，而不是恢复原尺寸。
+    return pick("width", 980, 640), pick("height", 660, 460)
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -353,6 +355,10 @@ class MainWindow(Adw.ApplicationWindow):
         self.summary.set_label(f"{running} / {total} 个隧道运行中" if total else "隧道")
 
     def _on_state_changed(self, _mgr, tunnel_id: str, state: str) -> None:
+        # 关窗时已经 stop_all()，但子进程要过一会儿才真正退出；那时窗口（及
+        # summary / toast overlay）已经销毁，再更新控件只会刷出一堆 GTK 警告。
+        if self._closing:
+            return
         self._update_summary()
         proc = self.manager.get(tunnel_id)
         if proc is None:
