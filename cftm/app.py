@@ -560,9 +560,13 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _copy_command(self, tunnel_id: str) -> None:
         proc = self.manager.get(tunnel_id)
-        if proc:
-            copy_text(self, proc.config.command_string(self.current_binary() or "cloudflared"))
+        if not proc:
+            return
+        command = proc.config.command_string(self.current_binary() or "cloudflared")
+        if copy_text(self, command):
             self.toast("命令行已复制到剪贴板")
+        else:
+            self.toast("无法访问剪贴板，命令行复制失败")
 
     def show_logs(self, tunnel_id: str) -> None:
         win = self._log_windows.get(tunnel_id)
