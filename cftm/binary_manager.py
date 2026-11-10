@@ -190,7 +190,13 @@ class BinaryManager:
 
     def installed(self) -> list[str]:
         """只列出当前平台可执行的普通文件，不将目录或异平台 .exe 视为已安装。"""
-        children = self.versions_dir.iterdir() if self.versions_dir.exists() else []
+        # 目录存在但读不了（权限收紧、挂载失效）时按“没有安装任何版本”处理：
+        # 这里抛 OSError 会一路冒到启动流程，让整个窗口都出不来。
+        try:
+            children = list(self.versions_dir.iterdir()) if self.versions_dir.exists() else []
+        except OSError as exc:
+            print(f"[binary-manager] 无法读取版本目录 {self.versions_dir}: {exc}")
+            return []
         return sorted(
             (child.name for child in children if self.is_installed(child.name)),
             key=version_key, reverse=True,
@@ -200,10 +206,16 @@ class BinaryManager:
         if not _is_safe_tag(tag):
             return False
         path = self.path_for(tag)
-        return (
-            not path.parent.is_symlink() and not path.is_symlink() and path.is_file()
-            and (self.system == "windows" or os.access(path, os.X_OK))
-        )
+        try:
+            return (
+                not path.parent.is_symlink() and not path.is_symlink() and path.is_file()
+                and (self.system == "windows" or os.access(path, os.X_OK))
+            )
+        except OSError:
+            # 版本目录可读但不可进入（如 r-- 权限）时，对子项 stat 会抛 PermissionError，
+            # pathlib 只吞 ENOENT 之类；这里按“没装”处理，否则 installed() / resolve() /
+            # 版本页刷新仍会把异常抛回启动流程。
+            return False
 
     def is_downloading(self, tag: str) -> bool:
         return tag in self._active_downloads
