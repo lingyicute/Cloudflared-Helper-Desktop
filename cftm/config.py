@@ -101,7 +101,9 @@ class Config:
     def load(self) -> None:
         self.data = json.loads(json.dumps(DEFAULTS))
         try:
-            with open(self.path, "r", encoding="utf-8") as fh:
+            # utf-8-sig：有些编辑器保存时会加 BOM，json 遇到 BOM 直接报错，
+            # 整份配置会被当成损坏文件搁置、隧道列表全部消失。
+            with open(self.path, "r", encoding="utf-8-sig") as fh:
                 loaded = json.load(fh)
             if isinstance(loaded, dict):
                 self.data.update(loaded)
