@@ -124,6 +124,10 @@ class QuickTunnelWatcher:
             self._controller.connect("enter", self._on_focus_enter)
             self._controller.connect("leave", self._on_focus_leave)
             window.add_controller(self._controller)
+            try:
+                window.connect("destroy", lambda *_: self.close_dialog())
+            except Exception:
+                pass
 
     def forget(self, host: str) -> None:
         """把一条链接重新标记为“未处理”，允许它再次触发询问。
@@ -157,6 +161,16 @@ class QuickTunnelWatcher:
         self.cancel_pending()
         # 用户确实离开了窗口：下一次 enter 才算“切回窗口”
         self._suppress_until_leave = False
+
+    def close_dialog(self) -> None:
+        """关闭确认框（如有），用于主窗口退出时清理，避免模态框阻止退出。"""
+        self.cancel_pending()
+        dlg, self._dialog = self._dialog, None
+        if dlg is not None:
+            try:
+                dlg.close()
+            except Exception:
+                pass
 
     def cancel_pending(self) -> None:
         self._read_generation += 1
