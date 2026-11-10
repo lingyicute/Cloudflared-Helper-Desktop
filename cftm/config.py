@@ -118,7 +118,10 @@ class Config:
             print(f"[config] 读取配置失败，使用默认值: {exc}")
             self._set_aside(str(exc))
         except OSError as exc:
+            # 文件在、但读不了（比如曾用 sudo 运行，属主成了 root）：同样先改名保留。
+            # 所在目录可写的话，下一次 save() 的原子替换照样会把它整个覆盖掉。
             print(f"[config] 读取配置失败，使用默认值: {exc}")
+            self._set_aside(str(exc))
 
     def _set_aside(self, reason: str) -> None:
         """把读不懂的配置文件改名保留。
@@ -129,12 +132,13 @@ class Config:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         base = f"{self.path.name}.corrupt-{stamp}"
         backup = self.path.with_name(base)
-        # 无论同一秒已有多少备份（包括悬空符号链接），都不能覆盖旧文件。
-        n = 0
-        while backup.exists() or backup.is_symlink():
-            n += 1
-            backup = self.path.with_name(f"{base}-{n}")
         try:
+            # 无论同一秒已有多少备份（包括悬空符号链接），都不能覆盖旧文件。
+            # 目录不可进入时 exists() 本身就会抛 PermissionError，所以也要在 try 里。
+            n = 0
+            while backup.exists() or backup.is_symlink():
+                n += 1
+                backup = self.path.with_name(f"{base}-{n}")
             os.replace(self.path, backup)
             print(f"[config] 原配置已保留为 {backup}（{reason}）")
         except OSError as exc:
