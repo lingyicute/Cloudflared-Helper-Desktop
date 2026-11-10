@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """GTK regression tests: run with xvfb-run -a python3 tests/ui_regressions.py."""
 import sys
+from collections import deque
 from pathlib import Path
 import tempfile
 import unittest
@@ -60,12 +61,60 @@ class UIRegressions(unittest.TestCase):
         self.addCleanup(window.destroy)
         window.follow_btn.set_active(False)
         for n in range(6500):
-            window._append(f'line {n}')
+            window._queue_append(f'line {n}')
+        window._cancel_flush()
+        window._flush_pending()
         self.assertLessEqual(window.buffer.get_line_count(), window.MAX_LINES + window.TRIM_SLACK)
         text = window.buffer.get_text(*window.buffer.get_bounds(), False)
         self.assertIn('line 6499', text)
         self.assertNotIn('line 0\n', text)
         window._on_close()
+
+    def test_log_updates_are_batched_and_clear_discards_pending(self):
+        # 只需 GTK TextBuffer，不依赖较新 libadwaita 的 ToolbarView。
+        window = Mock()
+        window.buffer = Gtk.TextBuffer()
+        window.MAX_LINES = LogWindow.MAX_LINES
+        window.TRIM_SLACK = LogWindow.TRIM_SLACK
+        window._pending_lines = deque(maxlen=window.MAX_LINES)
+        window._flush_source = None
+        window._flush_pending = lambda: LogWindow._flush_pending(window)
+        window._cancel_flush = lambda: LogWindow._cancel_flush(window)
+        window._trim_to = lambda n: LogWindow._trim_to(window, n)
+        window.follow_btn.get_active.return_value = False
+        for n in range(6500):
+            LogWindow._queue_append(window, f'line {n}')
+        self.assertLessEqual(len(window._pending_lines), window.MAX_LINES)
+        self.assertEqual(window.buffer.get_text(*window.buffer.get_bounds(), False), '')
+        window._cancel_flush()
+        window._flush_pending()
+        text = window.buffer.get_text(*window.buffer.get_bounds(), False)
+        self.assertIn('line 6499', text)
+        self.assertNotIn('line 0\n', text)
+        self.assertLessEqual(window.buffer.get_line_count(), window.MAX_LINES + window.TRIM_SLACK)
+        LogWindow._queue_append(window, 'stale line')
+        LogWindow._clear(window)
+        self.assertIsNone(window._flush_source)
+        window._flush_pending()
+        self.assertEqual(window.buffer.get_text(*window.buffer.get_bounds(), False), '')
+
+    def test_edit_reuses_tunnel_row(self):
+        win = Mock()
+        proc = TunnelProcess(TunnelConfig(name='before', hostname='x.example.com'))
+        win.manager.procs = [proc]
+        win._rows = []
+        win.listbox = Gtk.ListBox()
+        MainWindow._rebuild_list(win)
+        row = win._rows[0]
+        proc.config = proc.config.copy()
+        proc.config.name = 'after'
+        MainWindow._rebuild_list(win)
+        self.assertIs(win._rows[0], row)
+        self.assertEqual(row.get_title(), 'after')
+        win.manager.procs = []
+        MainWindow._rebuild_list(win)
+        self.assertEqual(row._hid, 0)
+        self.assertEqual(len(win._rows), 0)
 
     def test_editor_validation_is_transactional(self):
         parent = Gtk.Window()

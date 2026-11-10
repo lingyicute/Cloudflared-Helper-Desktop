@@ -331,20 +331,31 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _rebuild_list(self) -> None:
         self._prune_log_windows()
+        # 编辑配置不会替换 TunnelProcess；保留对应的 GTK 行，避免每次保存都
+        # 销毁整张列表并重新连接信号（也避免滚动位置与焦点跳动）。
+        live = {id(proc) for proc in self.manager.procs}
+        retained = {}
         for row in self._rows:
+            if id(row.proc) in live:
+                retained[id(row.proc)] = row
+                continue
             row.dispose_row()
             try:
                 self.listbox.remove(row)
             except Exception:
-                # GTK4 中 remove 可能在行已 unparent 时抛异常，兜底尝试 unparent
+                # 保留 GTK4 中行已 unparent 时的兼容兜底。
                 try:
                     row.unparent()
                 except Exception:
                     pass
-        self._rows.clear()
+        self._rows = []
         for proc in self.manager.procs:
-            row = TunnelRow(proc, self)
-            self.listbox.append(row)
+            row = retained.get(id(proc))
+            if row is None:
+                row = TunnelRow(proc, self)
+                self.listbox.append(row)
+            else:
+                row.refresh()
             self._rows.append(row)
         self.list_stack.set_visible_child_name("list" if self._rows else "empty")
         self._update_summary()

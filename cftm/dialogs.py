@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shlex
+from collections import deque
 from typing import Callable, Optional
 
 import gi
@@ -308,10 +309,15 @@ class LogWindow(Adw.Window):
         view.set_content(scroller)
         self.set_content(view)
 
-        for line in proc.log_lines():
-            self._append(line)
+        self._pending_lines: deque[str] = deque(maxlen=self.MAX_LINES)
+        self._flush_source: Optional[int] = None
+        history = proc.log_lines()
+        if history:
+            self.buffer.set_text("\n".join(history) + "\n")
+            if self.buffer.get_line_count() > self.MAX_LINES + self.TRIM_SLACK:
+                self._trim_to(self.MAX_LINES)
         self._update_subtitle()
-        self._hid_log = proc.connect("log-line", lambda _p, line: self._append(line))
+        self._hid_log = proc.connect("log-line", lambda _p, line: self._queue_append(line))
         self._hid_state = proc.connect("state-changed", lambda *_: self._update_subtitle())
         self.connect("close-request", self._on_close)
         self.connect("destroy", self._on_close)
@@ -324,16 +330,28 @@ class LogWindow(Adw.Window):
     def _update_subtitle(self) -> None:
         self.title_widget.set_subtitle(STATE_LABELS.get(self.proc.state, self.proc.state))
 
-    def _append(self, line: str) -> None:
-        end = self.buffer.get_end_iter()
-        self.buffer.insert(end, line + "\n")
-        # TextBuffer 不像 deque 有 maxlen：cloudflared 开 debug 日志时会狂刷输出，
-        # 不截断的话窗口开久了内存暴涨、UI 卡死。与 TunnelProcess 保持同样的 3000 行上限。
-        line_count = self.buffer.get_line_count()
-        if line_count > self.MAX_LINES + self.TRIM_SLACK:
-            self._trim_to(self.MAX_LINES)
-        if self.follow_btn.get_active():
-            self.textview.scroll_to_mark(self.end_mark, 0.0, False, 0.0, 1.0)
+    def _queue_append(self, line: str) -> None:
+        # 管道一次读取可能产生大量行；固定容量只保留最终会显示的尾部。
+        self._pending_lines.append(line)
+        if self._flush_source is None:
+            self._flush_source = GLib.timeout_add(30, self._flush_pending)
+
+    def _flush_pending(self) -> bool:
+        self._flush_source = None
+        if self._pending_lines:
+            lines = list(self._pending_lines)
+            self._pending_lines.clear()
+            self.buffer.insert(self.buffer.get_end_iter(), "\n".join(lines) + "\n")
+            if self.buffer.get_line_count() > self.MAX_LINES + self.TRIM_SLACK:
+                self._trim_to(self.MAX_LINES)
+            if self.follow_btn.get_active():
+                self.textview.scroll_to_mark(self.end_mark, 0.0, False, 0.0, 1.0)
+        return False
+
+    def _cancel_flush(self) -> None:
+        if self._flush_source is not None:
+            GLib.source_remove(self._flush_source)
+            self._flush_source = None
 
     def _trim_to(self, keep_lines: int) -> None:
         """只保留缓冲区末尾的 ``keep_lines`` 行。
@@ -352,14 +370,20 @@ class LogWindow(Adw.Window):
         self.buffer.delete(self.buffer.get_start_iter(), cut)
 
     def _copy_all(self, *_args) -> None:
+        self._cancel_flush()
+        self._flush_pending()
         start, end = self.buffer.get_bounds()
         copy_text(self, self.buffer.get_text(start, end, False))
 
     def _clear(self, *_args) -> None:
+        self._cancel_flush()
+        self._pending_lines.clear()
         self.proc.clear_log()
         self.buffer.set_text("")
 
     def _on_close(self, *_args) -> bool:
+        self._cancel_flush()
+        self._pending_lines.clear()
         if self._hid_log:
             self.proc.disconnect(self._hid_log)
             self._hid_log = 0
