@@ -30,6 +30,13 @@ class ConfigTests(unittest.TestCase):
         backups = sorted(self.path.parent.glob('config.json.corrupt-*'))
         self.assertEqual(sorted(b.read_bytes() for b in backups), sorted(raws))
 
+    def test_deeply_nested_config_is_set_aside_not_fatal(self):
+        raw = b'[' * 100000
+        self.path.write_bytes(raw)
+        self.assertEqual(Config(self.path).get('tunnels'), [])
+        backups = list(self.path.parent.glob('config.json.corrupt-*'))
+        self.assertEqual([b.read_bytes() for b in backups], [raw])
+
     def test_valid_config_is_not_set_aside(self):
         self.path.write_text('{"active_version": "system"}')
         self.assertEqual(Config(self.path).get('active_version'), 'system')
