@@ -111,7 +111,9 @@ class Config:
                 self._set_aside("顶层不是 JSON 对象")
         except FileNotFoundError:
             pass
-        except (UnicodeError, json.JSONDecodeError) as exc:
+        except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
+            # RecursionError：嵌套过深（比如文件损坏成一长串 "["）时 json 抛的不是
+            # JSONDecodeError，漏接会让应用启动即崩溃。
             print(f"[config] 读取配置失败，使用默认值: {exc}")
             self._set_aside(str(exc))
         except OSError as exc:
