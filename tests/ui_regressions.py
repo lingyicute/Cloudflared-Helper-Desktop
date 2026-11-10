@@ -5,7 +5,7 @@ from collections import deque
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -13,7 +13,7 @@ import gi
 
 gi.require_version('Adw', '1')
 gi.require_version('Gtk', '4.0')
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk
 
 from cftm.app import MainWindow, TunnelRow, _window_maximized, _window_size
 from cftm.binary_manager import BinaryManager
@@ -213,6 +213,40 @@ class UIRegressions(unittest.TestCase):
         for raw in (None, {}, {'maximized': 'false'}, {'maximized': None}):
             with self.subTest(raw=raw):
                 self.assertFalse(_window_maximized(raw))
+
+    def test_copy_all_logs_reports_the_clipboard_result(self):
+        window = Mock()
+        window.buffer = Gtk.TextBuffer()
+        window._pending_lines = deque(maxlen=LogWindow.MAX_LINES)
+        window._flush_source = None
+        window._flush_pending = lambda: LogWindow._flush_pending(window)
+        window._cancel_flush = lambda: LogWindow._cancel_flush(window)
+        with patch('cftm.dialogs.copy_text', return_value=True) as copy:
+            LogWindow._copy_all(window)
+            copy.assert_not_called()  # 空日志不覆盖用户剪贴板
+            window._toast.assert_called_once()
+            window.buffer.set_text('line 1\n')
+            window._toast.reset_mock()
+            LogWindow._copy_all(window)
+            copy.assert_called_once_with(window, 'line 1\n')
+            window._toast.assert_called_once_with('日志已复制到剪贴板')
+            copy.return_value = False
+            window._toast.reset_mock()
+            LogWindow._copy_all(window)
+            self.assertIn('失败', window._toast.call_args[0][0])
+
+    def test_open_dir_reports_failure_only_when_fallback_fails_too(self):
+        page = Mock()
+        page.bm = self.win.bm
+        with patch.object(Gio.AppInfo, 'launch_default_for_uri', side_effect=GLib.Error('no handler')), \
+                patch.object(Gio.Subprocess, 'new') as spawn:
+            VersionsPage._open_dir(page)
+            spawn.assert_called_once()
+            page.win.toast.assert_not_called()
+            spawn.side_effect = GLib.Error('no xdg-open')
+            VersionsPage._open_dir(page)
+            page.win.toast.assert_called_once()
+            self.assertIn('no handler', page.win.toast.call_args[0][0])
 
 
 if __name__ == '__main__':

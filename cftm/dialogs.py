@@ -306,7 +306,8 @@ class LogWindow(Adw.Window):
         )
         self.end_mark = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
         scroller = Gtk.ScrolledWindow(child=self.textview, vexpand=True)
-        view.set_content(scroller)
+        self.toasts = Adw.ToastOverlay(child=scroller)
+        view.set_content(self.toasts)
         self.set_content(view)
 
         self._pending_lines: deque[str] = deque(maxlen=self.MAX_LINES)
@@ -373,11 +374,23 @@ class LogWindow(Adw.Window):
         cut = found[1] if isinstance(found, tuple) else found  # 兼容两种绑定签名
         self.buffer.delete(self.buffer.get_start_iter(), cut)
 
+    def _toast(self, message: str) -> None:
+        self.toasts.add_toast(Adw.Toast.new(message))
+
     def _copy_all(self, *_args) -> None:
         self._cancel_flush()
         self._flush_pending()
         start, end = self.buffer.get_bounds()
-        copy_text(self, self.buffer.get_text(start, end, False))
+        text = self.buffer.get_text(start, end, False)
+        if not text:
+            # 日志为空时别用空串覆盖用户剪贴板里原有的内容
+            self._toast("日志为空，没有可复制的内容")
+            return
+        # 与“复制命令行”一致：剪贴板拒绝时如实提示，而不是毫无反馈
+        if copy_text(self, text):
+            self._toast("日志已复制到剪贴板")
+        else:
+            self._toast("无法访问剪贴板，日志复制失败")
 
     def _clear(self, *_args) -> None:
         self._cancel_flush()
