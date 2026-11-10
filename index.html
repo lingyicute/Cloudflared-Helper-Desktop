@@ -1899,11 +1899,15 @@ function normalizeHostname(raw) {
   var ipMsg = 'cloudflared 不支持 IP 地址，请使用域名';
   var v = String(raw == null ? '' : raw).trim();
   if (!v) return { error: '隧道主机名不能为空' };
+  var hadScheme = /^[A-Za-z][A-Za-z0-9+.\-]*:\/\//.test(v);
   var s = v.replace(/^[A-Za-z][A-Za-z0-9+.\-]*:\/\//, '').split(/[\/?#]/)[0];
+  if (hadScheme && s.indexOf('@') !== -1) s = s.slice(s.lastIndexOf('@') + 1);
   if (s.charAt(0) === '[' || (s.split(':').length > 2 && /^[0-9A-Fa-f:.]+$/.test(s))) return { error: ipMsg };
   s = s.replace(/^(.+):[0-9]+$/, '$1');
   if (s.charAt(s.length - 1) === '.') s = s.slice(0, -1);
-  if (/^(?:[0-9]+|0[xX][0-9A-Fa-f]*)$/.test(s.slice(s.lastIndexOf('.') + 1))) return { error: ipMsg };
+  var labels = s.split('.');
+  if (/^(?:[0-9]+|0[xX][0-9A-Fa-f]+)$/.test(labels[labels.length - 1]) ||
+      labels.every(function (x) { return /^(?:[0-9]+|0[xX][0-9A-Fa-f]*)$/.test(x); })) return { error: ipMsg };
   var label = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
   if (s.length > 253 || !new RegExp('^' + label + '(?:\\.' + label + ')+$').test(s)) {
     return { error: '需为完整域名（如 ssh.example.com），不含协议、路径或端口' };

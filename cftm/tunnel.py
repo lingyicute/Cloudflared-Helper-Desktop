@@ -31,7 +31,9 @@ STATE_LABELS = {
 _HOST_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
 _HOSTNAME_RE = re.compile(rf"{_HOST_LABEL}(?:\.{_HOST_LABEL})+")
 _IPV6_CHARS_RE = re.compile(r"[0-9A-Fa-f:.]+")
-_NUMERIC_LABEL_RE = re.compile(r"[0-9]+|0[xX][0-9A-Fa-f]*")
+_NUMERIC_LABEL_RE = re.compile(r"[0-9]+|0[xX][0-9A-Fa-f]+")
+# 允许空十六进制数字的 "0x"：只在整个主机名都由数字/十六进制标签组成时才按 IP 变体处理
+_IP_LIKE_LABEL_RE = re.compile(r"[0-9]+|0[xX][0-9A-Fa-f]*")
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 _HOSTNAME_IP_MSG = "cloudflared 不支持 IP 地址，请使用域名"
 _HOSTNAME_FORM_MSG = "需为完整域名（如 ssh.example.com），不含协议、路径或端口"
@@ -44,16 +46,26 @@ def normalize_hostname(raw: object) -> str:
     至少两段；自动剥离 scheme、路径/查询/片段、:port 与末尾点号。
     cloudflared 不支持 IP 地址，IPv4/IPv6 及其数字变体一律拒绝。
     """
-    if not isinstance(raw, str) or not raw.strip():
+    if raw is None:
         raise ValueError("隧道主机名不能为空")
-    host = _SCHEME_RE.sub("", raw.strip(), count=1)
+    if not isinstance(raw, str):
+        raise ValueError(_HOSTNAME_FORM_MSG)
+    if not raw.strip():
+        raise ValueError("隧道主机名不能为空")
+    stripped = raw.strip()
+    had_scheme = bool(_SCHEME_RE.match(stripped))
+    host = _SCHEME_RE.sub("", stripped, count=1)
     host = re.split(r"[/?#]", host, maxsplit=1)[0]
+    if had_scheme and "@" in host:
+        # 只有带协议的 URL 才有 userinfo（https://user:pw@host）；裸 user@host 仍然拒绝。
+        host = host.rsplit("@", 1)[-1]
     if host.startswith("[") or (host.count(":") >= 2 and _IPV6_CHARS_RE.fullmatch(host)):
         raise ValueError(_HOSTNAME_IP_MSG)
     host = re.sub(r"^(.+):[0-9]+$", r"\1", host)
     if host.endswith("."):
         host = host[:-1]
-    if _NUMERIC_LABEL_RE.fullmatch(host.rsplit(".", 1)[-1]):
+    labels = host.split(".")
+    if _NUMERIC_LABEL_RE.fullmatch(labels[-1]) or all(_IP_LIKE_LABEL_RE.fullmatch(x) for x in labels):
         raise ValueError(_HOSTNAME_IP_MSG)
     if len(host) > 253 or not _HOSTNAME_RE.fullmatch(host):
         raise ValueError(_HOSTNAME_FORM_MSG)
