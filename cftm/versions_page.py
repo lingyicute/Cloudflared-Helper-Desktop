@@ -272,14 +272,15 @@ class VersionsPage(Adw.PreferencesPage):
         uri = Gio.File.new_for_path(str(self.bm.versions_dir)).get_uri()
         try:
             Gio.AppInfo.launch_default_for_uri(uri, None)
+            return
         except GLib.Error as exc:
-            self.win.toast(f"无法打开目录: {exc.message}")
-            # 兜底：尝试用 xdg-open
-            try:
-                import subprocess
-                subprocess.Popen(["xdg-open", str(self.bm.versions_dir)])
-            except Exception:
-                pass
+            error = exc.message
+        # 兜底：再试 xdg-open，它也起不来才提示失败；以前先弹“无法打开目录”再兜底，
+        # 目录明明被 xdg-open 打开了，界面上却挂着一条错误。Gio.Subprocess 会自动回收子进程。
+        try:
+            Gio.Subprocess.new(["xdg-open", str(self.bm.versions_dir)], Gio.SubprocessFlags.NONE)
+        except GLib.Error:
+            self.win.toast(f"无法打开目录: {error}")
 
     # ------------------------------------------------------------ 发布列表
     def _clear_release_widgets(self) -> None:
