@@ -34,6 +34,7 @@ from .tunnel import (  # noqa: E402
     TunnelConfig,
     TunnelManager,
     TunnelProcess,
+    summarize_error,
     validate_hostname,
 )
 from .versions_page import VersionsPage  # noqa: E402
@@ -389,7 +390,7 @@ class MainWindow(Adw.ApplicationWindow):
             return
         name = proc.config.display_name
         if state == STATE_ERROR:
-            detail = proc.last_error or "请查看日志了解详情"
+            detail = summarize_error(proc.last_error or "") or "请查看日志了解详情"
             toast = Adw.Toast.new(f"{name} 连接失败：{detail[:80]}")
             toast.set_button_label("日志")
             toast.set_action_name("win.tunnel-logs")

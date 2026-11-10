@@ -262,5 +262,16 @@ class UIRegressions(unittest.TestCase):
         self.assertEqual(page.config.get('active_version'), 'latest-installed')
 
 
+    def test_failure_toast_names_the_real_reason(self):
+        win = Mock()
+        win._closing = False
+        proc = win.manager.get.return_value
+        proc.config.display_name = 'demo'
+        proc.last_error = ('2026-01-01T00:00:00Z ERR Error on Websocket listener error="failed to start '
+                           'forwarding server: listen tcp 127.0.0.1:21128: bind: address already in use"')
+        MainWindow._on_state_changed(win, None, 'abc', 'error')
+        self.assertIn('address already in use', win.toasts.add_toast.call_args.args[0].get_title())
+
+
 if __name__ == '__main__':
     unittest.main()

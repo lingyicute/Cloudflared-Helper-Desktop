@@ -41,6 +41,24 @@ _HOSTNAME_IP_MSG = "cloudflared 不支持 IP 地址，请使用域名"
 _HOSTNAME_FORM_MSG = "需为完整域名（如 ssh.example.com），不含协议、路径或端口"
 
 
+# cloudflared 控制台日志的行首：ISO 时间戳 + 三字母级别
+_LOG_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T[0-9:.+Z-]+\s+(?:(?:ERR|FTL|WRN|INF|DBG|TRC)\s+)?")
+
+
+def summarize_error(line: str) -> str:
+    """把一行错误日志压成适合放进提示条的短句。
+
+    提示条只容得下几十个字：原样截断的话前半截全是时间戳、级别和套话，
+    真正的原因（多半在行尾的 error="…" 里）反而被截掉。
+    """
+    low = line.lower()
+    if "address already in use" in low:
+        return "本地端口已被其他程序占用 (address already in use)"
+    if "bind: permission denied" in low:
+        return "没有权限监听该端口 (permission denied)"
+    return _LOG_PREFIX_RE.sub("", line.strip(), count=1)
+
+
 def _signal_name(signum: int) -> str:
     try:
         return signal.Signals(signum).name

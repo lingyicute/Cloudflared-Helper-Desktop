@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from gi.repository import GLib
 from cftm.config import Config
-from cftm.tunnel import STATE_ERROR, STATE_RUNNING, STATE_STARTING, STATE_STOPPED, TunnelConfig, TunnelManager, TunnelProcess, normalize_hostname
+from cftm.tunnel import STATE_ERROR, STATE_RUNNING, STATE_STARTING, STATE_STOPPED, TunnelConfig, TunnelManager, TunnelProcess, normalize_hostname, summarize_error
 
 
 def wait_until(predicate, timeout=4):
@@ -357,6 +357,18 @@ class TunnelTests(unittest.TestCase):
             proc._line_buffer.extend(line.encode('utf-8'))
             proc._flush_log_line()
             self.assertEqual(proc.last_error, line)
+
+    def test_error_summary_keeps_the_reason_within_toast_length(self):
+        prefix = '2026-01-01T00:00:00Z ERR Error on Websocket listener error="failed to start forwarding server: '
+        for reason in ('address already in use', 'permission denied'):
+            line = f'{prefix}listen tcp 127.0.0.1:21128: bind: {reason}"'
+            self.assertNotIn(reason, line[:80])
+            self.assertIn(reason, summarize_error(line)[:80])
+        self.assertEqual(
+            summarize_error('2026-01-01T08:00:00+08:00 ERR failed to connect to origin error="bad handshake"'),
+            'failed to connect to origin error="bad handshake"')
+        for line in ('Incorrect Usage: flag provided but not defined: -foo', '隧道配置无效: 端口必须在 1 到 65535 之间', ''):
+            self.assertEqual(summarize_error(line), line)
 
     def test_repeated_invalid_start_still_emits_error_signal(self):
         proc = TunnelProcess(TunnelConfig(hostname='bad host'))
