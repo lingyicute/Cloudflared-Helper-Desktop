@@ -94,3 +94,24 @@ class ConfigTests(unittest.TestCase):
             numbered = self.path.with_name('config.json.corrupt-20260101-000000-1')
             self.assertTrue(dangling.is_symlink())
             self.assertEqual(numbered.read_bytes(), b'{bad')
+
+    def test_set_aside_never_overwrites_existing_backups(self):
+        stamp = '20260101-000000'
+        base = self.path.with_name(f'config.json.corrupt-{stamp}')
+        existing = {}
+        for n in range(100):
+            backup = base if n == 0 else base.with_name(f'{base.name}-{n}')
+            existing[backup] = f'previous backup {n}'.encode()
+            backup.write_bytes(existing[backup])
+        self.path.write_bytes(b'{broken')
+
+        with patch('cftm.config.time.strftime', return_value=stamp):
+            cfg = Config(self.path)
+
+        self.assertFalse(self.path.exists())
+        self.assertEqual(
+            base.with_name(f'{base.name}-100').read_bytes(), b'{broken'
+        )
+        for backup, data in existing.items():
+            self.assertEqual(backup.read_bytes(), data)
+        self.assertEqual(cfg.get('tunnels'), [])

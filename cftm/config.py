@@ -101,12 +101,13 @@ class Config:
         配置就此丢失，用户连修一下再放回去的机会都没有。改名保留原文件权限（0600）。
         """
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}")
-        # 同一秒内多次发生也不能互相覆盖
-        for n in range(1, 100):
-            if not backup.exists() and not backup.is_symlink():
-                break
-            backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}-{n}")
+        base = f"{self.path.name}.corrupt-{stamp}"
+        backup = self.path.with_name(base)
+        # 无论同一秒已有多少备份（包括悬空符号链接），都不能覆盖旧文件。
+        n = 0
+        while backup.exists() or backup.is_symlink():
+            n += 1
+            backup = self.path.with_name(f"{base}-{n}")
         try:
             os.replace(self.path, backup)
             print(f"[config] 原配置已保留为 {backup}（{reason}）")
