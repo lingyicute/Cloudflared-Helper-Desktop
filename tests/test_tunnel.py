@@ -75,17 +75,35 @@ class TunnelTests(unittest.TestCase):
 
     def test_normalize_hostname_strips_url_parts_and_rejects_ip(self):
         for raw, want in [('tcp.example.com', 'tcp.example.com'), (' HTTPS://Tcp.Example.com:8443/a?b#c ', 'Tcp.Example.com'),
-                          ('tcp.example.com.', 'tcp.example.com'), ('a.b1', 'a.b1')]:
+                          ('tcp.example.com.', 'tcp.example.com'), ('a.b1', 'a.b1'),
+                          # 带协议的 URL：userinfo 被剥离，端口/路径照旧处理
+                          ('https://user@Tcp.Example.com', 'Tcp.Example.com'),
+                          ('ssh://git:p%40ss@tcp.example.com:22/x?y#z', 'tcp.example.com'),
+                          ('https://a@b@tcp.example.com', 'tcp.example.com'),
+                          # 空的 0x 标签不是数字：只有整个主机名都像 IP 时才拒绝
+                          ('ssh.example.0x', 'ssh.example.0x'), ('0x.example.com', '0x.example.com')]:
             with self.subTest(raw=raw):
                 self.assertEqual(normalize_hostname(raw), want)
         for bad in ['', '  ', 'localhost', 'a_b.example.com', '-a.example.com', 'a..b.com', 'a b.example.com',
                     'user@tcp.example.com', '1.2.3.4', 'https://127.0.0.1:22/', '2130706433', '0x7f.1',
-                    '[::1]', '[::1]:22', '::1', 'fe80::1', ('a' * 64) + '.example.com']:
+                    '[::1]', '[::1]:22', '::1', 'fe80::1', ('a' * 64) + '.example.com',
+                    # 裸 user@host 仍然拒绝；URL 去掉 userinfo 后若是 IP 同样拒绝
+                    'https://user@127.0.0.1', 'https://user@[::1]:22', 'https://@', 'https://user@',
+                    # 0x / 十六进制变体：全是数字/十六进制标签时按 IP 处理
+                    '0x', '1.2.3.0x', '0x.0x', '0x7f.0x1', '1.2.3.0X1F']:
             with self.subTest(bad=bad):
                 with self.assertRaises(ValueError):
                     normalize_hostname(bad)
                 with self.assertRaises(ValueError):
                     TunnelConfig(hostname=bad).build_argv('cloudflared')
+
+    def test_normalize_hostname_error_kinds(self):
+        for raw, fragment in [(None, '不能为空'), ('  ', '不能为空'), (123, '完整域名'), (b'a.example.com', '完整域名'),
+                              ('1.2.3.4', 'IP'), ('1.2.3.0x', 'IP'), ('a_b.example.com', '完整域名')]:
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError) as ctx:
+                    normalize_hostname(raw)
+                self.assertIn(fragment, str(ctx.exception))
 
     def test_from_dict_migrates_url_hostnames(self):
         self.assertEqual(TunnelConfig.from_dict({'hostname': 'https://ssh.example.com/'}).hostname, 'ssh.example.com')

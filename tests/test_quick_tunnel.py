@@ -37,6 +37,11 @@ SHOULD_MATCH = [
     ("https://x.trycloudflare.com?a=1", "x.trycloudflare.com"),              # 裸查询串
     ("https://x.trycloudflare.com/p?a=1#f", "x.trycloudflare.com"),          # 路径+查询+锚点
     ("https://x.trycloudflare.com:8443/h?a=1#f", "x.trycloudflare.com"),     # 端口+全套后缀
+    ("https://x.trycloudflare.com.", "x.trycloudflare.com"),                 # FQDN 末尾点号
+    ("x.trycloudflare.com.:8443/p", "x.trycloudflare.com"),                  # 末尾点号 + 端口 + 路径
+    ("{https://x.trycloudflare.com}", "x.trycloudflare.com"),                # 花括号包裹
+    ("（https://x.trycloudflare.com）", "x.trycloudflare.com"),              # 全角括号包裹
+    ("【x.trycloudflare.com】", "x.trycloudflare.com"),
 ]
 
 # 这些一律不该弹窗
@@ -57,6 +62,11 @@ SHOULD_REJECT = [
     "file:///home/user/x.trycloudflare.com",
     "https://-x.trycloudflare.com",
     "https://x.trycloudflare.com.evil.com#frag",   # 锚点不能成为后缀伪装的绕过
+    "https://x.trycloudflare.com.evil.com.",       # 末尾点号也不能放过后缀伪装
+    "https://x.trycloudflare.com..",               # 只允许一个末尾点号
+    "https://x.trycloudflare.com.:abc",
+    "{https://x.trycloudflare.com",                # 括号必须成对
+    "（https://x.trycloudflare.com)",
 ]
 
 
