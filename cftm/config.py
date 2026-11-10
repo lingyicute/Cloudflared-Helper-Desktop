@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
 
 APP_ID = "uk._92li.cftm.CloudflaredTunnelManager"
 APP_NAME = "Cloudflared 隧道管理器"
@@ -96,6 +96,10 @@ class Config:
 
     def __init__(self, path: Path = CONFIG_FILE):
         self.path = path
+        # 保存失败时的回调（参数为原因）与最近一次保存的结果：失败只打印到终端的话，
+        # 界面照常显示“已保存”，改动却在重启后悄悄丢失。
+        self.on_save_error: Optional[Callable[[str], None]] = None
+        self.last_save_ok = True
         self.data: dict[str, Any] = json.loads(json.dumps(DEFAULTS))
         self.load()
 
@@ -144,7 +148,8 @@ class Config:
         except OSError as exc:
             print(f"[config] 无法保留原配置: {exc}")
 
-    def save(self) -> None:
+    def save(self) -> bool:
+        """原子写盘，返回是否成功；失败时通知 ``on_save_error``，不抛异常。"""
         tmp: Path | None = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -159,8 +164,17 @@ class Config:
                 fh.flush()
                 os.fsync(fh.fileno())
             tmp.replace(self.path)
+            self.last_save_ok = True
+            return True
         except (OSError, UnicodeError, TypeError, ValueError) as exc:
             print(f"[config] 保存配置失败: {exc}")
+            self.last_save_ok = False
+            if self.on_save_error is not None:
+                try:
+                    self.on_save_error(str(exc))
+                except Exception:  # noqa: BLE001  (提示失败不该让 save() 反过来抛异常)
+                    pass
+            return False
         finally:
             if tmp is not None:
                 try:

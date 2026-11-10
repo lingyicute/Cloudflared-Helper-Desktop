@@ -203,6 +203,8 @@ class MainWindow(Adw.ApplicationWindow):
         if _window_maximized(window_state):
             self.maximize()
 
+        # 版本页初始化时就可能写配置，回调要在 _build_ui 之前挂好
+        self.config.on_save_error = self._on_config_save_error
         self._build_ui()
         self._setup_actions()
         self.manager.connect("tunnels-changed", lambda *_: self._rebuild_list())
@@ -404,6 +406,13 @@ class MainWindow(Adw.ApplicationWindow):
     def toast(self, message: str) -> None:
         self.toasts.add_toast(Adw.Toast.new(message))
 
+    def _on_config_save_error(self, reason: str) -> None:
+        """配置写不进磁盘（目录只读、磁盘已满等）时提示一声，否则改动会在重启后悄悄丢失。"""
+        # 关窗时保存窗口尺寸失败就不必提示了：toast overlay 马上要销毁
+        if self._closing or getattr(self, "toasts", None) is None:
+            return
+        self.toast(f"配置写入失败，改动在重启后会丢失：{reason[:80]}")
+
     def current_binary(self) -> Optional[str]:
         return self.bm.resolve(self.config.get("active_version", "latest-installed"))
 
@@ -543,13 +552,13 @@ class MainWindow(Adw.ApplicationWindow):
         if existing:
             was_active = existing.is_active()
             self.manager.update(cfg)
-            if was_active:
-                self.toast("配置已保存，将在下次连接时生效")
-            else:
-                self.toast("配置已保存")
+            message = "配置已保存，将在下次连接时生效" if was_active else "配置已保存"
         else:
             self.manager.add(cfg)
-            self.toast(f"已添加隧道「{cfg.display_name}」")
+            message = f"已添加隧道「{cfg.display_name}」"
+        # 写盘失败时 _on_config_save_error 已经提示过，别紧接着又说“已保存”
+        if self.config.last_save_ok:
+            self.toast(message)
 
     def _confirm_delete(self, tunnel_id: str) -> None:
         proc = self.manager.get(tunnel_id)

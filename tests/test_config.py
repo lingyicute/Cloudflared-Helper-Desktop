@@ -85,6 +85,22 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(json.loads(self.path.read_text())['active_version'], 'system')
         self.assertEqual(list(self.path.parent.iterdir()), [self.path])
 
+    def test_save_reports_the_outcome_to_the_ui(self):
+        cfg = Config(self.path)
+        reasons = []
+        cfg.on_save_error = reasons.append
+        self.assertTrue(cfg.save())
+        self.assertTrue(cfg.last_save_ok)
+        with patch.object(Path, 'replace', side_effect=OSError('disk error')):
+            self.assertFalse(cfg.save())
+            self.assertFalse(cfg.last_save_ok)
+            # 回调自己出错也不能让 save() 抛异常
+            cfg.on_save_error = lambda reason: 1 / 0
+            self.assertFalse(cfg.save())
+        self.assertEqual(reasons, ['disk error'])
+        self.assertTrue(cfg.save())
+        self.assertTrue(cfg.last_save_ok)
+
     def test_failed_encoding_preserves_original(self):
         self.path.write_text('{}')
         cfg = Config(self.path)
