@@ -30,6 +30,22 @@ class ConfigTests(unittest.TestCase):
         backups = sorted(self.path.parent.glob('config.json.corrupt-*'))
         self.assertEqual(sorted(b.read_bytes() for b in backups), sorted(raws))
 
+    def test_unopenable_config_is_set_aside_not_overwritten(self):
+        raw = '{"tunnels": [{"hostname": "keep.example.com"}]}'
+        self.path.write_text(raw)
+        with patch('cftm.config.open', side_effect=PermissionError('denied'), create=True):
+            cfg = Config(self.path)
+        self.assertEqual(cfg.get('tunnels'), [])
+        cfg.save()
+        backups = list(self.path.parent.glob('config.json.corrupt-*'))
+        self.assertEqual([b.read_text() for b in backups], [raw])
+
+    def test_untraversable_config_dir_does_not_abort_startup(self):
+        denied = PermissionError('denied')
+        with patch('cftm.config.open', side_effect=denied, create=True), \
+             patch.object(Path, 'exists', side_effect=denied):
+            self.assertEqual(Config(self.path).get('tunnels'), [])
+
     def test_deeply_nested_config_is_set_aside_not_fatal(self):
         raw = b'[' * 100000
         self.path.write_bytes(raw)
