@@ -333,11 +333,11 @@ class MainWindow(Adw.ApplicationWindow):
         self._prune_log_windows()
         # 编辑配置不会替换 TunnelProcess；保留对应的 GTK 行，避免每次保存都
         # 销毁整张列表并重新连接信号（也避免滚动位置与焦点跳动）。
-        live = {id(proc) for proc in self.manager.procs}
+        live = set(self.manager.procs)
         retained = {}
         for row in self._rows:
-            if id(row.proc) in live:
-                retained[id(row.proc)] = row
+            if row.proc in live:
+                retained[row.proc] = row
                 continue
             row.dispose_row()
             try:
@@ -350,7 +350,7 @@ class MainWindow(Adw.ApplicationWindow):
                     pass
         self._rows = []
         for index, proc in enumerate(self.manager.procs):
-            row = retained.get(id(proc))
+            row = retained.get(proc)
             if row is None:
                 row = TunnelRow(proc, self)
                 # 按管理器顺序插入：复用旧行后 append 会让 GTK 顺序与 manager.procs 脱节。
@@ -647,9 +647,16 @@ class MainWindow(Adw.ApplicationWindow):
             pass
 
     def _on_close_request(self, *_args) -> bool:
-        self.quick_tunnel.cancel_pending()
         running = len(self.manager.active())
         if running == 0 or self._force_close:
+            self.quick_tunnel.close_dialog()
+            for _dlg in (self._quit_dialog, self._delete_dialog,
+                         getattr(getattr(self, "versions_page", None), "_delete_dialog", None)):
+                if _dlg is not None:
+                    try:
+                        _dlg.close()
+                    except Exception:
+                        pass
             self._closing = True
             if self._autostart_timer is not None:
                 GLib.source_remove(self._autostart_timer)
@@ -660,6 +667,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.bm.cancel_all()
             self.manager.stop_all()
             return False
+        self.quick_tunnel.cancel_pending()
         if self._quit_dialog is not None:
             # 确认框已经开着：Ctrl+Q / 关闭按钮再按一次不要叠第二个
             self._quit_dialog.present()

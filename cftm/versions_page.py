@@ -308,6 +308,11 @@ class VersionsPage(Adw.PreferencesPage):
         if getattr(self.win, "_closing", False) is True:
             return
         try:
+            if not self.win.get_root():
+                return
+        except Exception:
+            return
+        try:
             self.refresh_btn.set_sensitive(True)
             self.spinner.stop()
             self.spinner.set_visible(False)

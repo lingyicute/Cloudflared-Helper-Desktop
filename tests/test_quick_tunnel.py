@@ -141,6 +141,34 @@ def watcher_checks():
     checks.append((w._pending_id != 0, "普通 enter 照常读剪贴板"))
     w.cancel_pending()
 
+    # close_dialog()：主窗口退出时关掉确认框并清空引用，同时取消待处理的剪贴板读取
+    class FakeDialog:
+        closed = 0
+
+        def close(self):
+            self.closed += 1
+
+    w, asked, _ = make_watcher()
+    dlg = FakeDialog()
+    w._dialog = dlg
+    w._on_focus_enter()
+    w.close_dialog()
+    checks.append((dlg.closed == 1 and w._dialog is None and w._pending_id == 0,
+                   "close_dialog 关闭确认框并取消待处理的读取"))
+    w.close_dialog()
+    checks.append((dlg.closed == 1, "没有确认框时 close_dialog 是空操作"))
+
+    class BrokenDialog:
+        def close(self):
+            raise RuntimeError("already destroyed")
+
+    w._dialog = BrokenDialog()
+    try:
+        w.close_dialog()
+        checks.append((w._dialog is None, "确认框已销毁时 close_dialog 不抛异常"))
+    except RuntimeError:
+        checks.append((False, "确认框已销毁时 close_dialog 不抛异常"))
+
     # 功能开关关闭 -> 什么都不做
     w, asked, _ = make_watcher(enabled=False)
     got = w.consider("https://disabled-abc.trycloudflare.com")
