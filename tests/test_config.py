@@ -162,6 +162,13 @@ class StrictBoolTests(unittest.TestCase):
                 self.assertIs(strict_bool(raw, default=True), want)
                 self.assertIs(strict_bool(raw, default=False), want)
 
+    def test_nan_falls_back_to_default(self):
+        from cftm.config import strict_bool
+        for default in (True, False):
+            self.assertIs(strict_bool(float('nan'), default=default), default)
+        # 手改的 config.json 里写 NaN，json 解析出来的正是 float('nan')
+        self.assertIs(strict_bool(json.loads('NaN'), default=False), False)
+
     def test_unrecognised_values_fall_back_to_default(self):
         from cftm.config import strict_bool
         for raw in (None, [], {}, 'maybe', {'on': True}):
