@@ -73,18 +73,24 @@ def _set_activates_default(widget: Gtk.Widget) -> None:
                 pass
 
 
-def copy_text(widget: Gtk.Widget, text: str) -> None:
+def copy_text(widget: Gtk.Widget, text: str) -> bool:
+    """把文本交给剪贴板；拿不到剪贴板或调用失败时返回 ``False``。
+
+    调用方据此提示成功 / 失败：以前无论剪贴板是否可用都会弹「已复制」，
+    在无显示环境或 Wayland 拒绝访问时等于骗用户。
+    """
     try:
         clipboard = widget.get_clipboard()
         if clipboard is None:
-            return
+            return False
         provider = Gdk.ContentProvider.new_for_bytes(
             "text/plain;charset=utf-8", GLib.Bytes.new(text.encode("utf-8"))
         )
-        clipboard.set_content(provider)
+        # set_content 自己会返回是否成功（剪贴板只读 / 无法认领时为 False），不能忽略
+        return clipboard.set_content(provider) is not False
     except Exception:
         # 剪贴板操作失败不应导致崩溃，例如在无显示环境或窗口已销毁时
-        pass
+        return False
 
 
 class TunnelDialog(Adw.Window):
