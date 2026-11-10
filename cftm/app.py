@@ -311,7 +311,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._add_action("stop-all", lambda *_: self.stop_all())
         self._add_action("tunnel-edit", lambda _a, p: self._edit(p.get_string()), "s")
         self._add_action("tunnel-delete", lambda _a, p: self._confirm_delete(p.get_string()), "s")
-        self._add_action("tunnel-duplicate", lambda _a, p: self.manager.duplicate(p.get_string()), "s")
+        self._add_action("tunnel-duplicate", lambda _a, p: self._duplicate(p.get_string()), "s")
         self._add_action("tunnel-copy", lambda _a, p: self._copy_command(p.get_string()), "s")
         self._add_action("tunnel-logs", lambda _a, p: self.show_logs(p.get_string()), "s")
 
@@ -550,6 +550,13 @@ class MainWindow(Adw.ApplicationWindow):
         dlg.connect("response", on_response)
         self._delete_dialog = dlg
         dlg.present()
+
+    def _duplicate(self, tunnel_id: str) -> None:
+        source = self.manager.get(tunnel_id)
+        copy = self.manager.duplicate(tunnel_id)
+        # 端口被顺延时要说出来，否则用户只会看到副本的监听地址和原隧道对不上
+        if source is not None and copy is not None and copy.config.port != source.config.port:
+            self.toast(f"端口 {source.config.port} 正被占用，副本已改用端口 {copy.config.port}")
 
     def _copy_command(self, tunnel_id: str) -> None:
         proc = self.manager.get(tunnel_id)

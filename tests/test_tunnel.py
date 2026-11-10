@@ -91,6 +91,47 @@ class TunnelTests(unittest.TestCase):
         self.assertEqual(TunnelConfig.from_dict({'hostname': 'https://ssh.example.com/'}).hostname, 'ssh.example.com')
         self.assertEqual(TunnelConfig.from_dict({'hostname': '1.2.3.4'}).hostname, '1.2.3.4')
 
+    def test_from_dict_only_enables_autostart_for_explicit_truthy_values(self):
+        # bool("false") 是 True：字符串 "false" 不能反而打开自动连接
+        cases = [(True, True), (False, False), ('true', True), (' TRUE ', True),
+                 ('yes', True), ('on', True), ('1', True), ('false', False),
+                 ('no', False), ('off', False), ('0', False), ('', False),
+                 (None, False), ([], False), ({}, False), (1, True), (0, False)]
+        for raw, want in cases:
+            with self.subTest(raw=raw):
+                self.assertIs(TunnelConfig.from_dict({'autostart': raw}).autostart, want)
+        self.assertFalse(TunnelConfig().autostart)
+
+    def test_duplicate_running_tunnel_gets_a_free_port(self):
+        proc = self.proc()
+        proc.state = STATE_RUNNING
+        try:
+            copy = self.manager.duplicate(proc.config.id)
+            self.assertIsNotNone(copy)
+            self.assertNotEqual(copy.config.port, proc.config.port)
+            self.assertIsNone(self.manager.port_conflict(copy.config))
+            self.assertEqual(copy.config.hostname, proc.config.hostname)
+            self.assertFalse(copy.config.autostart)
+        finally:
+            proc.state = STATE_STOPPED
+
+    def test_duplicate_port_wraps_within_unprivileged_range(self):
+        proc = self.manager.add(TunnelConfig(hostname='tcp.example.com', port=65535))
+        self.procs.append(proc)
+        proc.state = STATE_RUNNING
+        try:
+            copy = self.manager.duplicate(proc.config.id)
+            self.assertEqual(copy.config.port, 1024)
+            self.assertIsNone(self.manager.port_conflict(copy.config))
+        finally:
+            proc.state = STATE_STOPPED
+
+    def test_duplicate_stopped_tunnel_keeps_its_port(self):
+        proc = self.proc()
+        copy = self.manager.duplicate(proc.config.id)
+        self.assertIsNotNone(copy)
+        self.assertEqual(copy.config.port, proc.config.port)
+
     def test_invalid_arguments_are_rejected_before_spawn(self):
         for field, value in [('hostname', 'tcp\texample.com'), ('hostname', 'tcp\x00.example.com'),
                              ('hostname', '-flag.example.com'), ('hostname', 'https://tcp.example.com/path'),
