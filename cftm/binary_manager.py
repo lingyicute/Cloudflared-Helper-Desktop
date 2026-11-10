@@ -134,7 +134,12 @@ def format_eta(seconds: float) -> str:
 class BinaryManager:
     def __init__(self, versions_dir: Path):
         self.versions_dir = Path(versions_dir)
-        self.versions_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.versions_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            # 数据目录不可写（只读家目录、Flatpak 权限收紧、磁盘满）时应用仍要能启动：
+            # 已安装列表为空、回退到系统 PATH，下载时再把具体错误报给界面。
+            print(f"[binary-manager] 无法创建版本目录 {self.versions_dir}: {exc}")
         self.system, self.arch = detect_platform()
         self.asset = asset_name(self.system, self.arch)
         self._active_downloads: dict[str, threading.Event] = {}  # tag -> cancel event
