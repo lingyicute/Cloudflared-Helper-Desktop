@@ -223,6 +223,30 @@ class TunnelTests(unittest.TestCase):
         self.assertEqual(proc.state, STATE_STARTING)
         proc.state, proc._stream = STATE_STOPPED, None
 
+    def test_listener_line_before_bind_failure_never_reports_running(self):
+        # cloudflared 先打印 Start Websocket listener 再 bind，端口被占用时紧接着报错退出
+        proc = self.proc()
+        states = []
+        proc.connect('state-changed', lambda _p, st: states.append(st))
+        proc.start(self.script(
+            'import os\n'
+            'os.write(1, b"2026-01-01T00:00:00Z INF Start Websocket listener host=127.0.0.1:21128\\n")\n'
+            'os.write(1, b"2026-01-01T00:00:00Z ERR Error on Websocket listener error=address already in use\\n")\n'
+            'os._exit(1)\n'))
+        self.assertTrue(wait_until(lambda: proc.state == STATE_ERROR))
+        self.assertEqual(states, [STATE_STARTING, STATE_ERROR])
+        self.assertIn('address already in use', proc.last_error)
+
+    def test_listener_line_promotes_once_the_process_survives_the_grace(self):
+        proc = self.proc()
+        with patch.object(TunnelProcess, 'LISTENER_GRACE_MS', 50):
+            proc.start(self.script(
+                'import os, time\n'
+                'os.write(1, b"INF Start Websocket listener host=127.0.0.1:21128\\n")\n'
+                'time.sleep(30)\n'))
+            # 2 秒内就绪，说明走的是这条日志而不是 2.5 秒的兜底定时器
+            self.assertTrue(wait_until(lambda: proc.state == STATE_RUNNING, timeout=2))
+
     def test_eof_finishes_without_busy_reading_or_fallback(self):
         proc = self.proc()
         with patch.object(proc, '_read_next', wraps=proc._read_next) as read:
