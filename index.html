@@ -2095,6 +2095,20 @@ function portConflict(t) {
     return any.indexOf(a) !== -1 || any.indexOf(b) !== -1 || a === b;
   })[0] || null;
 }
+function nextFreePort(port) {
+  /* 同真实版 _next_free_port：跳过已声明或正占用的端口；原端口 >= 1024 时只在 1024–65535 内绕回 */
+  var used = {};
+  tunnels.forEach(function (p) {
+    used[p.port] = true;
+    if (isActive(p) && p.runningPort != null) used[p.runningPort] = true;
+  });
+  var low = port >= 1024 ? 1024 : 1, span = 65535 - low + 1;
+  for (var off = 1; off <= span; off++) {
+    var cand = (port - low + off) % span + low;
+    if (!used[cand]) return cand;
+  }
+  return port;
+}
 function startTunnel(id) {
   var t = find(id);
   if (!t || isActive(t)) return false;
@@ -2725,8 +2739,11 @@ tunnelList.addEventListener('click', function (e) {
           openTunnelDialog({ id: t.id, name: t.name, hostname: t.hostname, port: t.port, listen: t.listen, autostart: t.autostart, extra: t.extra }, false, false);
         } },
       { label: '复制为副本', fn: function () {
-          var c = tunnel(displayName(t) + ' (副本)', t.hostname, Math.min(65535, t.port + 1), { listen: t.listen, extra: t.extra });
+          /* 与真实版 duplicate 一致：只有原隧道运行中、端口真冲突时才顺延，并提示新端口 */
+          var c = tunnel(displayName(t) + ' (副本)', t.hostname, t.port, { listen: t.listen, extra: t.extra });
+          if (portConflict(c)) c.port = c.runningPort = nextFreePort(c.port);
           tunnels.push(c); renderTunnels();
+          if (c.port !== t.port) toast('端口 ' + t.port + ' 正被占用，副本已改用端口 ' + c.port);
         } },
       { label: '复制命令行', fn: function () {
           copyText(commandFor(t), { onDone: function (ok) { toast(ok ? '命令行已复制到剪贴板' : '浏览器没有放行剪贴板'); } });
