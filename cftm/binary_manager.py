@@ -30,6 +30,10 @@ GITHUB_API = "https://api.github.com/repos/cloudflare/cloudflared/releases?per_p
 DOWNLOAD_BASE = "https://github.com/cloudflare/cloudflared/releases/download"
 USER_AGENT = "cloudflared-tunnel-manager/1.0 (+https://github.com/lingyicute/Cloudflared-Helper-Desktop)"
 
+# cloudflared 单文件仅数十 MB；256MB 上限留足增长空间，同时防止无限流或解压炸弹撑满磁盘。
+MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024
+MAX_EXTRACTED_BYTES = 256 * 1024 * 1024
+
 
 class DownloadCancelled(Exception):
     pass
@@ -391,6 +395,8 @@ class BinaryManager:
                             content_length = 0
                         if content_length and expected_size and content_length != expected_size:
                             raise RuntimeError(f"文件大小与发布信息不符（{content_length}/{expected_size} 字节），已丢弃")
+                        if content_length > MAX_DOWNLOAD_BYTES or expected_size > MAX_DOWNLOAD_BYTES:
+                            raise RuntimeError(f"文件大小超出上限（{max(content_length, expected_size)} 字节），已丢弃")
                         total = content_length or expected_size
                         got = 0
                         hasher = hashlib.sha256()
@@ -404,6 +410,8 @@ class BinaryManager:
                             if not chunk:
                                 break
                             got += len(chunk)
+                            if got > MAX_DOWNLOAD_BYTES:
+                                raise RuntimeError(f"下载文件过大（已超 {MAX_DOWNLOAD_BYTES} 字节），已丢弃")
                             if content_length and got > content_length:
                                 raise RuntimeError(f"下载数据超出声明长度（{got}/{content_length} 字节），请重试")
                             if expected_size and got > expected_size:
@@ -447,15 +455,21 @@ class BinaryManager:
                             )
                             if member is None:
                                 raise RuntimeError(f"{self.asset} 里没有普通文件 cloudflared")
+                            if member.size > MAX_EXTRACTED_BYTES:
+                                raise RuntimeError(f"压缩包内文件过大（{member.size} 字节），已丢弃")
                             src = tf.extractfile(member)
                             if src is None:
                                 raise RuntimeError(f"{self.asset} 里的 cloudflared 无法读取")
                             with src, open(extracting, "wb") as dst:
+                                wrote = 0
                                 while True:
                                     check_cancelled()
                                     chunk = src.read(1 << 16)
                                     if not chunk:
                                         break
+                                    wrote += len(chunk)
+                                    if wrote > MAX_EXTRACTED_BYTES:
+                                        raise RuntimeError(f"解压后文件过大（已超 {MAX_EXTRACTED_BYTES} 字节），已丢弃")
                                     dst.write(chunk)
                         staged = extracting
                     if staged.stat().st_size == 0:
