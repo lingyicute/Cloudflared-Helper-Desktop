@@ -23,6 +23,7 @@ from .config import (  # noqa: E402
     PROJECT_URL,
     RESOURCE_DATA_DIR,
     Config,
+    strict_bool,
 )
 from .dialogs import LogWindow, TunnelDialog, copy_text  # noqa: E402
 from .quick_tunnel import QuickTunnelWatcher, quick_tunnel_name  # noqa: E402
@@ -472,7 +473,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     # ------------------------------------------------------------ 剪贴板快速连接
     def _quick_tunnel_enabled(self) -> bool:
-        return bool(self.config.get("clipboard_quick_tunnel", True))
+        # 手改成 "false" / "off" 时 bool() 会得到 True，功能反而被打开
+        return strict_bool(self.config.get("clipboard_quick_tunnel", True), default=True)
 
     def _quick_tunnel_hostnames(self) -> set:
         """已配置过的隧道主机名：快速隧道的子域是随机且唯一的，命中就说明建过了。"""

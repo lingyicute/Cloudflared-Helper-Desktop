@@ -16,6 +16,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, GObject  # noqa: E402
 
+from .config import strict_bool  # noqa: E402
+
 STATE_STOPPED = "stopped"
 STATE_STARTING = "starting"
 STATE_RUNNING = "running"
@@ -144,15 +146,7 @@ class TunnelConfig:
                 setattr(cfg, str_field, "" if value is None else str(value))
         # bool("false") 是 True：手改配置时把开关写成字符串 "false" 不能反而开启自动连接。
         # 只认明确的真值，其余（null、空字符串、对象、列表）一律视为关闭。
-        autostart = cfg.autostart
-        if isinstance(autostart, str):
-            cfg.autostart = autostart.strip().lower() in ("1", "true", "yes", "on")
-        elif isinstance(autostart, bool):
-            cfg.autostart = autostart
-        elif isinstance(autostart, (int, float)):
-            cfg.autostart = bool(autostart)
-        else:
-            cfg.autostart = False
+        cfg.autostart = strict_bool(cfg.autostart, default=False)
         # 额外清理：hostname 和 listen_host 去除首尾空白，避免后续校验遗漏
         cfg.hostname = cfg.hostname.strip()
         # 旧版本允许保存 URL 形式（https://host/path）的主机名，升级后自动整理成纯域名，

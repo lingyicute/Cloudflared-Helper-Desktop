@@ -137,3 +137,22 @@ class IconFallbackTests(unittest.TestCase):
                 ns = self.run_config({icon})
                 self.assertEqual(ns['APP_ICON_FILE'], Path(icon))
                 self.assertEqual(ns['RESOURCE_DATA_DIR'], RESOURCE_DATA_DIR)
+
+
+class StrictBoolTests(unittest.TestCase):
+    def test_only_explicit_switch_values_are_honoured(self):
+        from cftm.config import strict_bool
+        cases = [(True, True), (False, False), (1, True), (0, False), (0.0, False),
+                 ('true', True), (' ON ', True), ('yes', True), ('1', True),
+                 ('false', False), ('Off', False), ('no', False), ('0', False), ('', False)]
+        for raw, want in cases:
+            with self.subTest(raw=raw):
+                self.assertIs(strict_bool(raw, default=True), want)
+                self.assertIs(strict_bool(raw, default=False), want)
+
+    def test_unrecognised_values_fall_back_to_default(self):
+        from cftm.config import strict_bool
+        for raw in (None, [], {}, 'maybe', {'on': True}):
+            with self.subTest(raw=raw):
+                self.assertIs(strict_bool(raw, default=True), True)
+                self.assertIs(strict_bool(raw), False)
