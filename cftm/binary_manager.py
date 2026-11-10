@@ -501,10 +501,14 @@ class BinaryManager:
         for event in list(self._active_downloads.values()):
             event.set()
 
-    def remove(self, tag: str) -> None:
+    def remove(self, tag: str) -> bool:
+        """删除某个版本，返回它是否确实已经不在了。
+
+        rmtree 的失败是被忽略的（目录只读、文件被占用），所以删完得自己核对一遍。
+        """
         # 防路径穿越：tag 只能是单级目录名，否则 rmtree 会删到外面去。
         if not _is_safe_tag(tag):
-            return
+            return False
         self.cancel(tag)
         target = self.versions_dir / tag
         try:
@@ -512,5 +516,6 @@ class BinaryManager:
                 target.unlink(missing_ok=True)
             elif target.is_dir():
                 shutil.rmtree(target, ignore_errors=True)
+            return not (target.is_symlink() or target.exists())
         except OSError:
-            pass
+            return False

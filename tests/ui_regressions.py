@@ -248,6 +248,19 @@ class UIRegressions(unittest.TestCase):
             page.win.toast.assert_called_once()
             self.assertIn('no handler', page.win.toast.call_args[0][0])
 
+    def test_version_delete_reports_failure_honestly(self):
+        page = Mock()
+        page.config = self.win.config
+        page.config.set('active_version', '2026.1.0')
+        page.bm.remove.return_value = False
+        VersionsPage._delete_version(page, '2026.1.0')
+        self.assertIn('失败', page.win.toast.call_args.args[0])
+        self.assertEqual(page.config.get('active_version'), '2026.1.0')
+        page.bm.remove.return_value = True
+        VersionsPage._delete_version(page, '2026.1.0')
+        self.assertEqual(page.win.toast.call_args.args[0], '已删除 cloudflared 2026.1.0')
+        self.assertEqual(page.config.get('active_version'), 'latest-installed')
+
 
 if __name__ == '__main__':
     unittest.main()

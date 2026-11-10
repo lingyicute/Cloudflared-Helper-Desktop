@@ -336,6 +336,17 @@ class BinaryTests(unittest.TestCase):
         self.assertEqual(keep.read_text(), 'keep')
 
 
+    def test_remove_reports_whether_the_version_is_gone(self):
+        final = self.install_old()
+        with patch('cftm.binary_manager.shutil.rmtree'):
+            self.assertFalse(self.bm.remove(self.tag))
+        self.assertTrue(self.bm.is_installed(self.tag))
+        self.assertTrue(self.bm.remove(self.tag))
+        self.assertFalse(final.parent.exists())
+        self.assertTrue(self.bm.remove(self.tag))
+        self.assertFalse(self.bm.remove('../escape'))
+
+
 class FormatSizeTests(unittest.TestCase):
     def test_units_roll_over_at_the_displayed_value(self):
         cases = {0: '0 B', 1023: '1023 B', 1023.6: '1.0 KB', 1024: '1.0 KB', 1536: '1.5 KB',

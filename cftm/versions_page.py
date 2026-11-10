@@ -248,20 +248,26 @@ class VersionsPage(Adw.PreferencesPage):
 
         def on_response(_d, resp):
             self._delete_dialog = None
-            if resp != "delete":
-                return
-            self.bm.remove(tag)
-            if self.config.get("active_version") == tag:
-                self.config.set("active_version", "latest-installed")
-                self.config.save()
-            self._rebuild_installed()
-            self._sync_release_rows()
-            self.win.on_binary_changed()
-            self.win.toast(f"已删除 cloudflared {tag}")
+            if resp == "delete":
+                self._delete_version(tag)
 
         dlg.connect("response", on_response)
         self._delete_dialog = dlg
         dlg.present()
+
+    def _delete_version(self, tag: str) -> None:
+        removed = self.bm.remove(tag)
+        if removed and self.config.get("active_version") == tag:
+            self.config.set("active_version", "latest-installed")
+            self.config.save()
+        self._rebuild_installed()
+        self._sync_release_rows()
+        self.win.on_binary_changed()
+        if removed:
+            self.win.toast(f"已删除 cloudflared {tag}")
+        else:
+            # 目录只读等情况下删不掉：版本还在列表里，不能谎称已删除
+            self.win.toast(f"删除 cloudflared {tag} 失败，请检查安装目录的权限")
 
     def _open_dir(self, *_args) -> None:
         # 确保目录存在，Flatpak 环境下可能尚未创建
