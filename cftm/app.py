@@ -175,6 +175,11 @@ def _window_size(raw) -> tuple[int, int]:
     return pick("width", 980, 640), pick("height", 660, 460)
 
 
+def _window_maximized(raw) -> bool:
+    """上次退出时窗口是否处于最大化（配置可能被手改，按严格布尔值解析）。"""
+    return isinstance(raw, dict) and strict_bool(raw.get("maximized"), default=False)
+
+
 class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app: "Application"):
         super().__init__(application=app, title=APP_NAME)
@@ -190,9 +195,12 @@ class MainWindow(Adw.ApplicationWindow):
         self._binary_path: Optional[str] = None
         self._probe_generation = 0
 
-        width, height = _window_size(self.config.get("window"))
+        window_state = self.config.get("window")
+        width, height = _window_size(window_state)
         self.set_default_size(width, height)
         self.set_size_request(640, 460)
+        if _window_maximized(window_state):
+            self.maximize()
 
         self._build_ui()
         self._setup_actions()
@@ -638,11 +646,15 @@ class MainWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------ 关闭
     def _save_window_size(self) -> None:
         try:
-            w = self.get_width()
-            h = self.get_height()
+            # 最大化时 get_width()/get_height() 是铺满屏幕的尺寸，存下来会让下次启动
+            # 得到一个占满屏幕却没有最大化的窗口。默认尺寸始终是还原后的大小（GTK
+            # 推荐用它保存窗口状态），最大化另行记录。
+            w, h = self.get_default_size()
+            if w <= 0 or h <= 0:
+                w, h = self.get_width(), self.get_height()
             # 窗口未实现或最小化时可能返回 0，过滤掉
             if w > 0 and h > 0:
-                self.config.set("window", {"width": w, "height": h})
+                self.config.set("window", {"width": w, "height": h, "maximized": bool(self.is_maximized())})
                 self.config.save()
         except Exception:
             # 获取尺寸失败时不保存，避免把 0 写入配置导致下次启动窗口过小

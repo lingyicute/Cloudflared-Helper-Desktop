@@ -15,7 +15,7 @@ gi.require_version('Adw', '1')
 gi.require_version('Gtk', '4.0')
 from gi.repository import Adw, Gtk
 
-from cftm.app import MainWindow, TunnelRow, _window_size
+from cftm.app import MainWindow, TunnelRow, _window_maximized, _window_size
 from cftm.binary_manager import BinaryManager
 from cftm.config import Config
 from cftm.dialogs import LogWindow, TunnelDialog, copy_text
@@ -197,6 +197,22 @@ class UIRegressions(unittest.TestCase):
             with self.subTest(raw=raw):
                 win.config.get.return_value = raw
                 self.assertIs(MainWindow._quick_tunnel_enabled(win), want)
+
+    def test_window_state_keeps_restored_size_and_maximized_flag(self):
+        # 最大化退出时要保存还原后的尺寸，而不是铺满屏幕的当前尺寸
+        win = Mock()
+        win.config = self.win.config
+        win.get_default_size.return_value = (1000, 700)
+        win.get_width.return_value, win.get_height.return_value = 1920, 1080
+        win.is_maximized.return_value = True
+        MainWindow._save_window_size(win)
+        saved = Config(win.config.path).get('window')
+        self.assertEqual(saved, {'width': 1000, 'height': 700, 'maximized': True})
+        self.assertEqual(_window_size(saved), (1000, 700))
+        self.assertTrue(_window_maximized(saved))
+        for raw in (None, {}, {'maximized': 'false'}, {'maximized': None}):
+            with self.subTest(raw=raw):
+                self.assertFalse(_window_maximized(raw))
 
 
 if __name__ == '__main__':
