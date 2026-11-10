@@ -25,9 +25,9 @@ QUICK_TUNNEL_DOMAIN = "trycloudflare.com"
 _QUICK_TUNNEL_RE = re.compile(
     r"""^
     (?:https?://)?                                        # 可选协议头
-    (?P<host>(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+       # 至少一个子域标签
+    (?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+  # 至少一个子域标签，每段 1–63 字符
                trycloudflare\.com)\.?                    # 允许 FQDN 末尾点号
-    (?::\d+)?                                             # 可选端口
+    (?::[0-9]+)?                                          # 可选端口
     (?:[/?#][^\s]*)?                                      # 可选路径 / 查询 / 锚点
     $
     """,
@@ -70,6 +70,10 @@ def parse_quick_tunnel_url(text: Optional[str]) -> Optional[str]:
     if match is None:
         return None
     host = match.group("host").lower()
+    # 与 normalize_hostname 对齐：总长超过 253，或含 IGNORECASE 下被 [a-z] 放进来的
+    # 非 ASCII 字母（ſ、ı 等）的主机名过不了保存时的校验，弹窗问了也是白问。
+    if len(host) > 253 or not host.isascii():
+        return None
     # 正则已经要求至少一个子域标签，这里再兜一层：光秃秃的 trycloudflare.com
     # 是官网域名，不是某条快速隧道，不该拿去建隧道。
     if not host.endswith("." + QUICK_TUNNEL_DOMAIN):

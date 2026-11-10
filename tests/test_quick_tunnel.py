@@ -42,6 +42,7 @@ SHOULD_MATCH = [
     ("{https://x.trycloudflare.com}", "x.trycloudflare.com"),                # 花括号包裹
     ("（https://x.trycloudflare.com）", "x.trycloudflare.com"),              # 全角括号包裹
     ("【x.trycloudflare.com】", "x.trycloudflare.com"),
+    ("https://" + "a" * 63 + ".trycloudflare.com", "a" * 63 + ".trycloudflare.com"),  # 标签恰好 63 字符
 ]
 
 # 这些一律不该弹窗
@@ -67,6 +68,11 @@ SHOULD_REJECT = [
     "https://x.trycloudflare.com.:abc",
     "{https://x.trycloudflare.com",                # 括号必须成对
     "（https://x.trycloudflare.com)",
+    # 以下主机名过不了 normalize_hostname，弹窗后预填的对话框永远存不了
+    "https://" + "a" * 64 + ".trycloudflare.com",  # 标签超过 63 字符
+    "https://" + "a." * 120 + "trycloudflare.com",  # 总长超过 253
+    "https://\u017fsh.trycloudflare.com",           # IGNORECASE 下 [a-z] 也匹配 ſ
+    "https://x.trycloudflare.com:１２",             # 全角数字不是端口
 ]
 
 
