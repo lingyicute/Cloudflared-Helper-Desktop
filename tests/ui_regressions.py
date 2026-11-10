@@ -116,6 +116,23 @@ class UIRegressions(unittest.TestCase):
         self.assertEqual(row._hid, 0)
         self.assertEqual(len(win._rows), 0)
 
+    def test_rebuild_keeps_listbox_in_manager_order(self):
+        win = Mock()
+        a = TunnelProcess(TunnelConfig(name='a', hostname='a.example.com'))
+        b = TunnelProcess(TunnelConfig(name='b', hostname='b.example.com'))
+        c = TunnelProcess(TunnelConfig(name='c', hostname='c.example.com'))
+        win.manager.procs = [a, c]
+        win._rows = []
+        win.listbox = Gtk.ListBox()
+        MainWindow._rebuild_list(win)
+        win.manager.procs = [a, b, c]
+        MainWindow._rebuild_list(win)
+        self.assertEqual([r.proc for r in win._rows], [a, b, c])
+        self.assertEqual([win.listbox.get_row_at_index(i) for i in range(3)], win._rows)
+        win.manager.procs = [c, a, b]
+        MainWindow._rebuild_list(win)
+        self.assertEqual([win.listbox.get_row_at_index(i).proc for i in range(3)], [c, a, b])
+
     def test_editor_validation_is_transactional(self):
         parent = Gtk.Window()
         self.addCleanup(parent.destroy)

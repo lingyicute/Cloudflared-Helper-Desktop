@@ -316,6 +316,10 @@ class LogWindow(Adw.Window):
             self.buffer.set_text("\n".join(history) + "\n")
             if self.buffer.get_line_count() > self.MAX_LINES + self.TRIM_SLACK:
                 self._trim_to(self.MAX_LINES)
+            # 旧实现逐行 _append 时每行都会滚动；整体 set_text 后必须显式滚到底，
+            # 否则开启“自动滚动”的窗口一打开停在最早的历史行，直到下一行日志才跳动。
+            if self.follow_btn.get_active():
+                self.textview.scroll_to_mark(self.end_mark, 0.0, False, 0.0, 1.0)
         self._update_subtitle()
         self._hid_log = proc.connect("log-line", lambda _p, line: self._queue_append(line))
         self._hid_state = proc.connect("state-changed", lambda *_: self._update_subtitle())
