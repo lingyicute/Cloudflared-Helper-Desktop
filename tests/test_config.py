@@ -35,6 +35,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(Config(self.path).get('active_version'), 'system')
         self.assertEqual(list(self.path.parent.iterdir()), [self.path])
 
+    def test_utf8_bom_config_is_loaded_not_set_aside(self):
+        self.path.write_bytes(b'\xef\xbb\xbf{"active_version": "system"}')
+        self.assertEqual(Config(self.path).get('active_version'), 'system')
+        self.assertEqual(list(self.path.parent.iterdir()), [self.path])
+
     def test_save_does_not_follow_predictable_temp_symlink(self):
         victim = self.path.parent / 'other-file'
         victim.write_text('keep me')
