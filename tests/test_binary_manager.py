@@ -255,6 +255,27 @@ class BinaryTests(unittest.TestCase):
         BinaryManager(self.bm.versions_dir)
         self.assertFalse(staging.exists())
 
+    def test_unreadable_versions_dir_is_treated_as_empty(self):
+        target = Path(self.tmp.name) / 'unreadable'
+        target.mkdir()
+        bm = BinaryManager(target)
+        with patch.object(Path, 'iterdir', side_effect=PermissionError('denied')):
+            self.assertEqual(bm.installed(), [])
+            with patch.object(bm, 'system_binary', return_value=None):
+                self.assertIsNone(bm.resolve('latest-installed'))
+
+    def test_untraversable_versions_dir_is_treated_as_empty(self):
+        # 目录能列出但进不去：子项 stat 抛 PermissionError（用 mock 以便 root 下也能跑）
+        target = Path(self.tmp.name) / 'untraversable'
+        (target / '2026.1.0').mkdir(parents=True)
+        bm = BinaryManager(target)
+        with patch.object(Path, 'is_symlink', side_effect=PermissionError('denied')):
+            self.assertFalse(bm.is_installed('2026.1.0'))
+            self.assertEqual(bm.installed(), [])
+            with patch.object(bm, 'system_binary', return_value=None):
+                self.assertIsNone(bm.resolve('2026.1.0'))
+                self.assertIsNone(bm.resolve('latest-installed'))
+
     def test_unwritable_versions_dir_does_not_abort_startup(self):
         target = Path(self.tmp.name) / 'readonly' / 'versions'
         with patch.object(Path, 'mkdir', side_effect=PermissionError('read-only')):
