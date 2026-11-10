@@ -247,6 +247,17 @@ class TunnelTests(unittest.TestCase):
             # 2 秒内就绪，说明走的是这条日志而不是 2.5 秒的兜底定时器
             self.assertTrue(wait_until(lambda: proc.state == STATE_RUNNING, timeout=2))
 
+    def test_exit_log_tells_signals_from_exit_codes(self):
+        proc = self.proc()
+        proc.start(self.script('import time\nprint("ready", flush=True)\ntime.sleep(30)\n'))
+        self.assertTrue(wait_until(lambda: any('ready' in line for line in proc.log_lines())))
+        proc.stop()
+        self.assertTrue(wait_until(lambda: proc.state == STATE_STOPPED))
+        self.assertTrue(proc.log_lines()[-1].endswith('[进程已被信号 SIGTERM 终止]'))
+        proc.start(self.script('raise SystemExit(3)\n'))
+        self.assertTrue(wait_until(lambda: proc.state == STATE_ERROR))
+        self.assertTrue(proc.log_lines()[-1].endswith('[进程已退出，状态码 3]'))
+
     def test_eof_finishes_without_busy_reading_or_fallback(self):
         proc = self.proc()
         with patch.object(proc, '_read_next', wraps=proc._read_next) as read:
