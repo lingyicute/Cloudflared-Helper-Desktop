@@ -229,6 +229,9 @@ class TunnelProcess(GObject.Object):
 
     MAX_LOG_LINE_BYTES = 64 * 1024
     READ_CHUNK_BYTES = 16 * 1024
+    # cloudflared 先打印 “Start Websocket listener” 再去 bind 端口，端口被占用时紧接着
+    # 报错退出；看到这行后进程还能再活这么久（毫秒），才算真的“已连接”。
+    LISTENER_GRACE_MS = 400
 
     def __init__(self, config: TunnelConfig):
         super().__init__()
@@ -242,6 +245,7 @@ class TunnelProcess(GObject.Object):
         self._read_cancel: Optional[Gio.Cancellable] = None
         self._line_buffer = bytearray()
         self._line_truncated = False
+        self._listener_seen = False
         self._stopping = False
         # 普通 stop() 挂上的 5 秒强杀定时器；force 升级或进程退出时要摘掉
         self._kill_timer: Optional[int] = None
@@ -305,6 +309,7 @@ class TunnelProcess(GObject.Object):
         self._stopping = False
         self._pending_exit = None
         self._eof = False
+        self._listener_seen = False
         self._running_snapshot = self.config.copy()
         self._set_state(STATE_STARTING)
         self._append("$ " + " ".join(shlex.quote(a) for a in argv))
@@ -403,10 +408,18 @@ class TunnelProcess(GObject.Object):
             return
         self._append(text)
         low = text.lower()
-        if not self._stopping and not self._eof and self._pending_exit is None and (
-            "start websocket listener" in low or "listening on" in low
+        if (
+            not self._listener_seen and self.state == STATE_STARTING
+            and not self._stopping and not self._eof and self._pending_exit is None
+            and ("start websocket listener" in low or "listening on" in low)
         ):
-            self._set_state(STATE_RUNNING)
+            # 这行日志出现在 bind 之前：此刻就置为“已连接”的话，端口被占用时界面会先弹
+            # “已连接”、紧接着又弹“连接失败”。进程在宽限期内退出时 _on_exit 会摘掉定时器。
+            self._listener_seen = True
+            self._cancel_promote_timer()
+            self._promote_timer = GLib.timeout_add(
+                self.LISTENER_GRACE_MS, self._promote_running, self._proc
+            )
         if (
             " err " in f" {low} "
             or " ftl " in f" {low} "
