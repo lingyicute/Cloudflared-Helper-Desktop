@@ -84,15 +84,11 @@ def launch_command() -> str:
     """返回当前程序的启动命令，用于 .desktop 文件的 Exec=。"""
     if getattr(sys, "frozen", False):  # PyInstaller 便携包
         return _quote_exec_arg(os.path.abspath(sys.executable))
-    # 尝试定位 main.py：优先使用 RESOURCE_DATA_DIR 的父目录，其次使用当前文件的祖先目录
-    candidates = [
-        Path(RESOURCE_DATA_DIR).parent / "main.py",
-        Path(__file__).resolve().parent.parent / "main.py",
-        Path.cwd() / "main.py",
-    ]
-    for main_py in candidates:
-        if main_py.is_file():
-            return f"{_quote_exec_arg(sys.executable)} {_quote_exec_arg(str(main_py))}"
+    # 只认与本 cftm 包同目录的 main.py：当前工作目录或资源目录旁的 main.py 可能是
+    # 毫不相干的脚本，写进 Exec= 后从应用菜单启动时执行的就是它。
+    main_py = Path(__file__).resolve().parent.parent / "main.py"
+    if main_py.is_file():
+        return f"{_quote_exec_arg(sys.executable)} {_quote_exec_arg(str(main_py))}"
     # 回退：若找不到 main.py，直接使用 python -m cftm 方式（若包已安装）
     return f"{_quote_exec_arg(sys.executable)} -m cftm"
 
