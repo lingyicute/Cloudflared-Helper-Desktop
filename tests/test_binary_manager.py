@@ -122,6 +122,31 @@ class BinaryTests(unittest.TestCase):
         self.bm.system, self.bm.asset = 'darwin', 'cloudflared-darwin-amd64.tgz'
         return Response(data.getvalue())
 
+    def test_download_size_limit_is_enforced(self):
+        final = self.install_old()
+        data = b'x' * 100
+        with patch('cftm.binary_manager.MAX_DOWNLOAD_BYTES', 64):
+            for response, kwargs in [(Response(data, len(data)), {}),   # 声明长度超限
+                                     (Response(data), {'size': len(data)}),  # 发布信息超限
+                                     (Response(data), {})]:             # 无长度信息的无限流
+                with self.subTest(kwargs=kwargs, declared=response.headers):
+                    error = self.download(response, **kwargs)
+                    self.assertIn('超', error)
+                    self.assertEqual(final.read_bytes(), b'old')
+            # 恰好等于上限仍可安装
+            self.assertIsNone(self.download(Response(data[:64]), size=64))
+        self.assertEqual(self.bm.path_for(self.tag).read_bytes(), data[:64])
+
+    def test_extracted_size_limit_is_enforced(self):
+        final = self.install_old()
+        with patch('cftm.binary_manager.MAX_EXTRACTED_BYTES', 2):
+            error = self.download(self.archive('cloudflared'))   # 归档里的文件是 3 字节
+            self.assertIn('过大', error)
+            self.assertEqual(final.read_bytes(), b'old')
+        with patch('cftm.binary_manager.MAX_EXTRACTED_BYTES', 3):
+            self.assertIsNone(self.download(self.archive('cloudflared')))
+        self.assertEqual(self.bm.path_for(self.tag).read_bytes(), b'new')
+
     def test_tgz_success(self):
         self.assertIsNone(self.download(self.archive('./cloudflared')))
         self.assertEqual(self.bm.path_for(self.tag).read_bytes(), b'new')
