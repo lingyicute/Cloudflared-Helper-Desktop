@@ -83,6 +83,23 @@ class QuoteExecArgTests(unittest.TestCase):
             self.assertNotIn("[Desktop Action extra]", built)
             self.assertIn("Exec=", built)
 
+    def test_launch_command_ignores_unrelated_main_py(self):
+        # 当前目录 / 资源目录旁的 main.py 与本包无关，不能写进 Exec=
+        import cftm.desktop_integration as di
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("print('unrelated')\n", encoding="utf-8")
+            pkg = root / "site-packages" / "cftm"
+            pkg.mkdir(parents=True)
+            with patch.object(di, "__file__", str(pkg / "desktop_integration.py")), \
+                    patch.object(di, "RESOURCE_DATA_DIR", root / "data"), \
+                    patch.object(di.Path, "cwd", return_value=root):
+                command = di.launch_command()
+            self.assertNotIn(tmp, command)
+            self.assertTrue(command.endswith(" -m cftm"))
+        own = Path(di.__file__).resolve().parent.parent / "main.py"
+        self.assertIn(di._quote_exec_arg(str(own)), di.launch_command())
+
 
 if __name__ == "__main__":
     unittest.main()
