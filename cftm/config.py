@@ -80,7 +80,8 @@ def strict_bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):
-        return bool(value)
+        # json 能解析出 NaN，而 bool(nan) 是 True；NaN 不等于自身，按“认不出”处理
+        return bool(value) if value == value else default
     if isinstance(value, str):
         word = value.strip().lower()
         if word in _TRUE_WORDS:
