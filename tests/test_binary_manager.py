@@ -255,6 +255,21 @@ class BinaryTests(unittest.TestCase):
         BinaryManager(self.bm.versions_dir)
         self.assertFalse(staging.exists())
 
+    def test_unwritable_versions_dir_does_not_abort_startup(self):
+        target = Path(self.tmp.name) / 'readonly' / 'versions'
+        with patch.object(Path, 'mkdir', side_effect=PermissionError('read-only')):
+            bm = BinaryManager(target)
+        self.assertEqual(bm.installed(), [])
+        self.assertFalse(target.exists())
+        self.assertFalse(bm.is_installed('2026.1.0'))
+        with patch.object(Path, 'mkdir', side_effect=PermissionError('read-only')), \
+             patch('cftm.binary_manager.threading.Thread', InlineThread), \
+             patch('cftm.binary_manager.GLib.idle_add', side_effect=lambda cb, *a: cb(*a)):
+            done = []
+            bm.download('2026.1.0', lambda *_: None, lambda *a: done.append(a))
+        self.assertEqual(len(done), 1)
+        self.assertIsNotNone(done[0][1])
+
     def test_size_provides_progress_fallback_and_remove_unlinks_symlinks(self):
         fractions = []
         data = b'12345678'
