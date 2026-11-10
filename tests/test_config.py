@@ -115,3 +115,25 @@ class ConfigTests(unittest.TestCase):
         for backup, data in existing.items():
             self.assertEqual(backup.read_bytes(), data)
         self.assertEqual(cfg.get('tunnels'), [])
+
+
+class IconFallbackTests(unittest.TestCase):
+    """图标回退到系统 hicolor 目录时，不能把资源目录也改成图标目录。"""
+
+    def run_config(self, existing):
+        import runpy
+
+        real_is_file = Path.is_file
+        with patch.object(Path, 'is_file', lambda p: str(p) in existing or (
+                not str(p).endswith('.svg') and real_is_file(p))):
+            return runpy.run_path(str(Path(__file__).resolve().parent.parent / 'cftm' / 'config.py'))
+
+    def test_icon_fallback_keeps_resource_data_dir(self):
+        from cftm.config import APP_ID, RESOURCE_DATA_DIR
+
+        for prefix in ('/app', '/usr'):
+            icon = f'{prefix}/share/icons/hicolor/scalable/apps/{APP_ID}.svg'
+            with self.subTest(prefix=prefix):
+                ns = self.run_config({icon})
+                self.assertEqual(ns['APP_ICON_FILE'], Path(icon))
+                self.assertEqual(ns['RESOURCE_DATA_DIR'], RESOURCE_DATA_DIR)

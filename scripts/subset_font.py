@@ -56,10 +56,10 @@ def collect_chars():
     # 本页大量文案由 <script> 动态渲染（renderTunnels、seedData、日志与状态文本），
     # 整站手写体下这些字符也必须进入子集；base64 与 SVG path 均为纯 ASCII，
     # 不会被误收，因此直接收集 script 块中的全部非 ASCII 字符。
-    for block in re.findall(r"<script\b.*?</script>", html, flags=re.S):
+    for block in re.findall(r"<script\b.*?</script>", html, flags=re.S | re.IGNORECASE):
         chars.update(c for c in block if ord(c) > 126)
     # Avoid subsetting Chinese code comments, SVG paths or base64 blobs as visible text.
-    css = "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", html, flags=re.S))
+    css = "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", html, flags=re.S | re.IGNORECASE))
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     for content in re.findall(r'content:\s*[\'"]([^\'"]*)[\'"]', css):
         chars.update(content)
@@ -87,7 +87,7 @@ def subset(font, chars):
 
 def replace_face(html, family, filename):
     for match in re.finditer(r"@font-face\s*\{[^}]*\}", html):
-        if re.search(r'font-family:\s*"' + re.escape(family) + r'"\s*;', match[0]):
+        if re.search(r"font-family:\s*[\'\"]" + re.escape(family) + r"[\'\"]\s*;", match[0]):
             face = f'''@font-face{{
   font-family: "{family}";
   src: url("static/fonts/{filename}") format("woff2");
