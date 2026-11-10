@@ -273,5 +273,17 @@ class UIRegressions(unittest.TestCase):
         self.assertIn('address already in use', win.toasts.add_toast.call_args.args[0].get_title())
 
 
+    def test_save_failure_is_reported_instead_of_claiming_saved(self):
+        win = Mock()
+        win._closing = False
+        MainWindow._on_config_save_error(win, 'disk full')
+        self.assertIn('disk full', win.toast.call_args.args[0])
+        for ok in (False, True):
+            win = Mock()
+            win.config.last_save_ok = ok
+            MainWindow._on_saved(win, TunnelConfig(hostname='x.example.com'))
+            self.assertEqual(win.toast.called, ok)
+
+
 if __name__ == '__main__':
     unittest.main()
