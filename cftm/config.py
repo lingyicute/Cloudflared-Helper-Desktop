@@ -47,7 +47,6 @@ if not APP_ICON_FILE.is_file():
     ):
         if alt.is_file():
             APP_ICON_FILE = alt
-            RESOURCE_DATA_DIR = alt.parent
             break
 
 def _xdg(env: str, default: str) -> Path:

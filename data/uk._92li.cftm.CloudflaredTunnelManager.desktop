@@ -10,3 +10,4 @@ Type=Application
 Categories=Network;RemoteAccess;GTK;GNOME;
 Keywords=cloudflare;tunnel;ssh;rdp;tcp;proxy;
 StartupNotify=true
+StartupWMClass=uk._92li.cftm.CloudflaredTunnelManager
