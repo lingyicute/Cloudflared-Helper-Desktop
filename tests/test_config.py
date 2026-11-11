@@ -1,6 +1,8 @@
 """Configuration persistence regressions; no display required."""
 import json
+import os
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -75,6 +77,47 @@ class ConfigTests(unittest.TestCase):
     def test_save_is_private(self):
         Config(self.path).save()
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    @unittest.skipUnless(os.name == 'posix', '目录 fsync 仅适用于 POSIX')
+    def test_save_syncs_the_directory_after_the_rename(self):
+        """文件内容与目录项都要 fsync 过，rename 结果才能在断电后保住。"""
+        cfg = Config(self.path)
+        cfg.set('active_version', '2026.1.0')
+        events = []
+        real_fsync, real_replace = os.fsync, Path.replace
+
+        def fsync(fd):
+            events.append('fsync-dir' if stat.S_ISDIR(os.fstat(fd).st_mode) else 'fsync-file')
+            return real_fsync(fd)
+
+        def replace(src, dst):
+            events.append('replace')
+            return real_replace(src, dst)
+
+        with patch('cftm.config.os.fsync', side_effect=fsync), \
+                patch.object(Path, 'replace', replace):
+            self.assertTrue(cfg.save())
+        self.assertEqual(events, ['fsync-file', 'replace', 'fsync-dir'])
+        self.assertEqual(json.loads(self.path.read_text(encoding='utf-8'))['active_version'], '2026.1.0')
+
+    @unittest.skipUnless(os.name == 'posix', '目录 fsync 仅适用于 POSIX')
+    def test_directory_sync_failure_does_not_fail_the_save(self):
+        cfg = Config(self.path)
+        cfg.set('active_version', '2026.1.0')
+        real_fsync = os.fsync
+
+        def fsync(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError('directory fsync unsupported')
+            return real_fsync(fd)
+
+        errors = []
+        cfg.on_save_error = errors.append
+        with patch('cftm.config.os.fsync', side_effect=fsync):
+            self.assertTrue(cfg.save())
+        self.assertEqual(errors, [])
+        self.assertTrue(cfg.last_save_ok)
+        self.assertEqual(json.loads(self.path.read_text(encoding='utf-8'))['active_version'], '2026.1.0')
 
     def test_failed_replace_preserves_original_and_cleans_temp(self):
         self.path.write_text('{"active_version": "system"}')
