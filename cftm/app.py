@@ -508,7 +508,10 @@ class MainWindow(Adw.ApplicationWindow):
         if not enabled:
             self.quick_tunnel.cancel_pending()
         self.config.set("clipboard_quick_tunnel", enabled)
-        self.config.save()
+        if not self.config.save():
+            # 保存失败的提示由 on_save_error 负责；再说一句“已开启 / 已关闭”
+            # 会和它互相矛盾，用户重启后才发现开关又变回去了。
+            return
         self.toast(
             "已开启：窗口获得焦点时检测剪贴板中的快速隧道链接"
             if enabled
