@@ -19,6 +19,7 @@ import tarfile
 import threading
 import tempfile
 import time
+import unicodedata
 import urllib.request
 from urllib.parse import quote
 from pathlib import Path
@@ -64,6 +65,29 @@ def asset_name(system: str, arch: str) -> str:
     return f"cloudflared-linux-{arch}"
 
 
+#: 版本号上限（按 UTF-8 字节计）：常见的日期式标签只有十几个字符，128 足够宽松；
+#: 文件系统的单级名称上限是 255 字节，下载时还要加 ``.install-`` 之类的前后缀，
+#: 太长只会在下载时报一句 ENAMETOOLONG。按字节而不是字符计，CJK 字符占 3 字节。
+MAX_TAG_LENGTH = 128
+
+#: 版本号里不允许出现的 Unicode 类别：控制字符、格式字符（含双向覆盖）、
+#: 代理码位和行 / 段分隔符，它们会把日志和界面搞乱。
+_FORBIDDEN_TAG_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
+
+
+def _version_number(text: str) -> Optional[int]:
+    """把版本号里的十进制字段转成 int，转不了时返回 ``None``。
+
+    Python 3.11 起 ``int()`` 对超过 4300 位的数字串会抛 ValueError。版本号来自
+    GitHub 返回的 tag，排序时不能因为一条怪异的名字让整份列表崩掉。
+    （目录名受 255 字节限制，装不下这么长的数字串；这里是对 tag 的纵深防御。）
+    """
+    try:
+        return int(text)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def version_key(tag: str) -> tuple:
     """先比较主版本，再比较预发布标识；构建元数据不影响优先级。"""
     match = re.fullmatch(
@@ -72,14 +96,19 @@ def version_key(tag: str) -> tuple:
     )
     if match is None:
         return (0, 0, 0), -1, ()
-    core = tuple(int(match[i]) for i in (1, 2, 3))
+    core = tuple(_version_number(match[i]) for i in (1, 2, 3))
+    if any(value is None for value in core):
+        # 位数多到 int() 都收不下：当作认不出的版本号，排到最后而不是抛异常
+        return (0, 0, 0), -1, ()
     prerelease = match[4]
+    identifiers: list[tuple[int, object]] = []
     # 数字标识按数值排序，且低于非数字标识（SemVer）；稳定版高于所有同号预发布。
-    identifiers = tuple(
-        (0, int(part)) if part.isdigit() else (1, part)
-        for part in prerelease.split(".")
-    ) if prerelease is not None else ()
-    return core, int(prerelease is None), identifiers
+    # 上面的正则已把预发布部分限定为 ASCII，isascii() 只是防御性冗余：
+    # 万一以后放宽正则，'²'.isdigit() 为真而 int('²') 抛 ValueError，也不会走到这里。
+    for part in prerelease.split(".") if prerelease is not None else ():
+        number = _version_number(part) if part.isascii() and part.isdigit() else None
+        identifiers.append((0, number) if number is not None else (1, part))
+    return core, int(prerelease is None), tuple(identifiers)
 
 
 def _is_safe_tag(tag: object) -> bool:
@@ -93,7 +122,13 @@ def _is_safe_tag(tag: object) -> bool:
     # 额外拒绝以 '.' 开头的隐藏目录，避免 .hidden 这类
     if tag.startswith("."):
         return False
-    return True
+    # 目录名有长度上限，控制字符则会把日志和界面搞乱
+    if any(unicodedata.category(ch) in _FORBIDDEN_TAG_CATEGORIES for ch in tag):
+        return False
+    try:
+        return len(tag.encode("utf-8")) <= MAX_TAG_LENGTH
+    except UnicodeEncodeError:  # 孤立代理码位：编码不了，也就没法当文件名用
+        return False
 
 def _parse_sha256_digest(digest: object) -> Optional[str]:
     """把 GitHub API 的 ``sha256:<hex>`` 解析成小写 hex；格式不认识就返回 None（跳过校验）。"""

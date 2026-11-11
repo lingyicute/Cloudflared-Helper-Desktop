@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from cftm.binary_manager import BinaryManager, format_size, version_key
+from cftm.binary_manager import MAX_TAG_LENGTH, BinaryManager, _is_safe_tag, format_size, version_key
 
 
 class InlineThread:
@@ -354,3 +354,29 @@ class FormatSizeTests(unittest.TestCase):
         for value, text in cases.items():
             with self.subTest(value=value):
                 self.assertEqual(format_size(value), text)
+
+
+class VersionKeyHardeningTests(unittest.TestCase):
+    def test_huge_numeric_fields_do_not_raise(self):
+        # Python 3.11 起 int() 拒绝超过 4300 位的数字串；版本列不能因此崩掉
+        huge = '9' * 5000
+        self.assertEqual(version_key(huge + '.1.0'), ((0, 0, 0), -1, ()))
+        self.assertLess(version_key('1.2.3-' + huge), version_key('1.2.3'))
+        self.assertGreater(version_key('1.2.3-1.' + huge), version_key('1.2.3-1'))
+
+    def test_overlong_or_control_tags_are_rejected(self):
+        self.assertTrue(_is_safe_tag('2026.1.0'))
+        self.assertTrue(_is_safe_tag('1.2.3-rc.1'))
+        self.assertTrue(_is_safe_tag('a' * MAX_TAG_LENGTH))
+        # 长度按 UTF-8 字节计：42 个汉字 = 126 字节可以，43 个 = 129 字节不行
+        self.assertTrue(_is_safe_tag('\u7248' * 42))
+        bad = (
+            'a' * (MAX_TAG_LENGTH + 1), '\u7248' * 43,
+            '1.2.3\n\u6ce8\u5165', '1.2.3\x7f', '1\t.2.3',
+            '1.2.3\x85', '1.2.3\u202e', '1.2.3\u2028', '1.2.3\ud800',
+        )
+        for tag in bad:
+            with self.subTest(tag=ascii(tag)[:16]):
+                self.assertFalse(_is_safe_tag(tag))
+                with tempfile.TemporaryDirectory() as tmp:
+                    self.assertFalse(BinaryManager(Path(tmp)).is_installed(tag))
