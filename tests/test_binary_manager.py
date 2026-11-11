@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from cftm.binary_manager import MAX_TAG_LENGTH, BinaryManager, _is_safe_tag, format_size, version_key
+from cftm.binary_manager import MAX_TAG_LENGTH, BinaryManager, _is_safe_tag, format_eta, format_size, version_key
 
 
 class InlineThread:
@@ -380,3 +380,21 @@ class VersionKeyHardeningTests(unittest.TestCase):
                 self.assertFalse(_is_safe_tag(tag))
                 with tempfile.TemporaryDirectory() as tmp:
                     self.assertFalse(BinaryManager(Path(tmp)).is_installed(tag))
+
+
+class FormatEtaTests(unittest.TestCase):
+    def test_truncates_instead_of_rounding_up_to_a_whole_unit(self):
+        cases = {
+            0: '剩余 0 秒', 0.4: '剩余 0 秒', 59.9: '剩余 59 秒', 60: '剩余 1 分 00 秒',
+            65: '剩余 1 分 05 秒', 3599.9: '剩余 59 分 59 秒', 3600: '剩余 1 小时 00 分',
+            3661: '剩余 1 小时 01 分', -3: '剩余 0 秒',
+        }
+        for value, text in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(format_eta(value), text)
+
+    def test_non_finite_or_invalid_values_do_not_raise(self):
+        for value in (float('nan'), float('inf'), float('-inf'), None, 'x'):
+            with self.subTest(value=value):
+                self.assertEqual(format_eta(value), '剩余时间未知')
+
