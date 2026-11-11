@@ -228,8 +228,11 @@ class VersionsPage(Adw.PreferencesPage):
         if self._suppress_select or self.config.get("active_version") == key:
             return
         self.config.set("active_version", key)
-        self.config.save()
-        self.win.toast("已切换 cloudflared 版本策略，新启动的隧道将使用新版本")
+        saved = self.config.save()
+        # 写盘失败时 on_save_error 已经提示过，别紧接着再说“已切换”，
+        # 否则用户会以为重启后仍是这个版本。本次会话内仍然按新选择解析。
+        if saved:
+            self.win.toast("已切换 cloudflared 版本策略，新启动的隧道将使用新版本")
         self.win.on_binary_changed()
 
     def _confirm_delete(self, tag: str) -> None:

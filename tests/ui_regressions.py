@@ -4,6 +4,7 @@ import sys
 from collections import deque
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -283,6 +284,41 @@ class UIRegressions(unittest.TestCase):
             win.config.last_save_ok = ok
             MainWindow._on_saved(win, TunnelConfig(hostname='x.example.com'))
             self.assertEqual(win.toast.called, ok)
+
+    def test_version_switch_is_not_reported_as_saved_when_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(Path(tmp) / 'config.json')
+            cfg.set('active_version', 'latest-installed')
+            page = SimpleNamespace(_suppress_select=False, config=cfg, win=Mock())
+            with patch.object(Config, 'save', return_value=False):
+                VersionsPage._select(page, '2026.1.0')
+            self.assertEqual(cfg.get('active_version'), '2026.1.0')  # 本次会话仍按新选择
+            page.win.toast.assert_not_called()
+            page.win.on_binary_changed.assert_called_once()
+            page.win.reset_mock()
+            with patch.object(Config, 'save', return_value=True):
+                VersionsPage._select(page, 'latest-installed')
+            page.win.toast.assert_called_once()
+            page.win.on_binary_changed.assert_called_once()
+
+    def test_quick_tunnel_switch_is_not_reported_as_saved_when_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(Path(tmp) / 'config.json')
+            win = SimpleNamespace(config=cfg, quick_tunnel=Mock(), toast=Mock())
+            action = Mock()
+            off = Mock()
+            off.get_boolean.return_value = False
+            with patch.object(Config, 'save', return_value=False):
+                MainWindow._on_toggle_quick_tunnel(win, action, off)
+            action.set_state.assert_called_once_with(off)
+            win.quick_tunnel.cancel_pending.assert_called_once()
+            self.assertFalse(cfg.get('clipboard_quick_tunnel'))
+            win.toast.assert_not_called()
+            on = Mock()
+            on.get_boolean.return_value = True
+            with patch.object(Config, 'save', return_value=True):
+                MainWindow._on_toggle_quick_tunnel(win, action, on)
+            win.toast.assert_called_once()
 
 
 if __name__ == '__main__':
