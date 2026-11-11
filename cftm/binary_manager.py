@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -160,8 +161,20 @@ def format_speed(bytes_per_sec: float) -> str:
 
 
 def format_eta(seconds: float) -> str:
-    """把剩余秒数格式化为「剩余 1 分 05 秒」这样的文本。"""
-    seconds = max(0, int(round(seconds)))
+    """把剩余秒数格式化为「剩余 1 分 05 秒」这样的文本。
+
+    先截断再拆分单位：四舍五入会把 59.9 秒显示成「1 分 00 秒」、把 3599.9 秒
+    显示成「1 小时 00 分」，看起来像还要等整整一分钟 / 一个小时。
+    NaN / 无穷大（速度趋近 0 时 ``剩余字节 / 速度`` 会溢出）无从估计，如实说未知，
+    而不是显示「0 秒」让人以为马上完成；负数仍按 0 处理。
+    """
+    try:
+        value = float(seconds)
+    except (TypeError, ValueError, OverflowError):
+        value = math.nan
+    if not math.isfinite(value):
+        return "剩余时间未知"
+    seconds = int(max(0.0, value))
     if seconds < 60:
         return f"剩余 {seconds} 秒"
     minutes, seconds = divmod(seconds, 60)
