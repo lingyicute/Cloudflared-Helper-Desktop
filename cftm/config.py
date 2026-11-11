@@ -148,6 +148,28 @@ class Config:
         except OSError as exc:
             print(f"[config] 无法保留原配置: {exc}")
 
+    def _sync_parent_dir(self) -> None:
+        """把目录项也刷到磁盘。
+
+        文件内容 fsync 过，但 rename 产生的目录项还留在页缓存里：断电后 rename 可能没落盘，
+        重启看到的仍是旧配置。这只是尽力而为——非 POSIX 平台打不开目录、某些文件系统
+        不支持目录 fsync，失败时配置本身已经写好，不该因此报“保存失败”。
+        """
+        if os.name != "posix":
+            return
+        dir_fd: Optional[int] = None
+        try:
+            dir_fd = os.open(self.path.parent, os.O_RDONLY)
+            os.fsync(dir_fd)
+        except OSError:
+            pass
+        finally:
+            if dir_fd is not None:
+                try:
+                    os.close(dir_fd)
+                except OSError:
+                    pass
+
     def save(self) -> bool:
         """原子写盘，返回是否成功；失败时通知 ``on_save_error``，不抛异常。"""
         tmp: Path | None = None
@@ -164,6 +186,7 @@ class Config:
                 fh.flush()
                 os.fsync(fh.fileno())
             tmp.replace(self.path)
+            self._sync_parent_dir()
             self.last_save_ok = True
             return True
         except (OSError, UnicodeError, TypeError, ValueError) as exc:
